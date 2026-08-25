@@ -1,0 +1,116 @@
+.page {
+    display: grid;
+    gap: 20px;
+    max-width: 900px;
+}
+
+.heading h2 {
+    margin: 0;
+    font-size: 25px;
+    letter-spacing: -0.5px;
+}
+
+.heading p {
+    margin: 6px 0 0;
+    color: #8992a1;
+    font-size: 13px;
+}
+
+.card {
+    display: grid;
+    gap: 22px;
+    padding: 24px;
+    background: #fff;
+    border: 1px solid #e8ebf0;
+    border-radius: 14px;
+}
+
+.field {
+    display: grid;
+    gap: 8px;
+}
+
+.field label {
+    color: #4c5564;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.inputWrapper {
+    display: flex;
+    align-items: center;
+    border: 1px solid #dce1e7;
+    border-radius: 9px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.inputWrapper span {
+    padding: 12px 14px;
+    background: #f7f8fa;
+    border-right: 1px solid #dce1e7;
+    color: #5f6877;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.inputWrapper input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 0;
+    outline: 0;
+    color: #172033;
+    font-size: 15px;
+}
+
+.warning {
+    padding: 13px 15px;
+    border: 1px solid #eadfbd;
+    border-radius: 9px;
+    background: #fffaf0;
+    color: #77643a;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.saveButton {
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 16px;
+    border: 0;
+    border-radius: 9px;
+    background: #172033;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.saveButton:hover {
+    background: #273248;
+}
+
+.saveButton:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.success,
+.error {
+    padding: 12px 14px;
+    border-radius: 9px;
+    font-size: 13px;
+}
+
+.success {
+    border: 1px solid #ccebdc;
+    background: #eefaf4;
+    color: #16764f;
+}
+
+.error {
+    border: 1px solid #f5ccc7;
+    background: #fff0ee;
+    color: #b33b31;
+}
