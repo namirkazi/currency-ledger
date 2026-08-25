@@ -2,8 +2,8 @@
 
 require_once __DIR__ . '/../config/cors.php';
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../helpers/response.php';
 require_once __DIR__ . '/../helpers/auth.php';
+require_once __DIR__ . '/../helpers/response.php';
 
 $user = requireAdmin();
 
@@ -22,50 +22,46 @@ if (!in_array($currency, ['AED', 'USDT'], true)) {
     ], 422);
 }
 
-if ($amount === '' || !is_numeric($amount)) {
+if (
+    $amount === '' ||
+    !preg_match('/^\d+(\.\d{1,6})?$/', $amount) ||
+    bccomp($amount, '0', 6) < 0
+) {
     jsonResponse([
         'success' => false,
         'message' => 'Invalid amount.'
     ], 422);
 }
 
-if ((float) $amount < 0) {
-    jsonResponse([
-        'success' => false,
-        'message' => 'Opening balance cannot be negative.'
-    ], 422);
-}
-
 try {
+
     $pdo->beginTransaction();
 
     /*
-     * Opening balances are only established once.
+     * Opening balance is only allowed once
+     * for each individual currency.
      */
-    $stmt = $pdo->prepare("
+    $check = $pdo->prepare("
         SELECT id
         FROM opening_balances
         WHERE currency = ?
         LIMIT 1
-        FOR UPDATE
     ");
 
-    $stmt->execute([$currency]);
+    $check->execute([$currency]);
 
-    if ($stmt->fetch()) {
-        $pdo->rollBack();
-
-        jsonResponse([
-            'success' => false,
-            'message' => "An opening balance for {$currency} already exists."
-        ], 409);
+    if ($check->fetch()) {
+        throw new RuntimeException(
+            "{$currency} opening balance already exists."
+        );
     }
 
     /*
-     * Create the opening balance record.
+     * Create opening balance record.
      */
     $stmt = $pdo->prepare("
-        INSERT INTO opening_balances (
+        INSERT INTO opening_balances
+        (
             currency,
             amount,
             created_by
@@ -79,50 +75,44 @@ try {
         $user['id']
     ]);
 
-    $openingBalanceId = $pdo->lastInsertId();
-
     /*
-     * Create the corresponding ledger entry.
+     * Opening balance is a ledger movement,
+     * NOT a trade.
      */
-    $stmt = $pdo->prepare("
-        INSERT INTO ledger_entries (
-            opening_balance_id,
+    $ledgerStmt = $pdo->prepare("
+        INSERT INTO ledger_entries
+        (
+            transaction_id,
             entry_type,
             currency,
             amount
         )
-        VALUES (?, 'OPENING_BALANCE', ?, ?)
+        VALUES (NULL, 'OPENING_BALANCE', ?, ?)
     ");
 
-    $stmt->execute([
-        $openingBalanceId,
+    $ledgerStmt->execute([
         $currency,
         $amount
     ]);
 
     /*
-     * Initialize the current balance.
+     * Synchronize balance projection.
      */
-    $stmt = $pdo->prepare("
-        INSERT INTO account_balances (
-            currency,
-            balance
-        )
-        VALUES (?, ?)
-        ON DUPLICATE KEY UPDATE
-            balance = balance + VALUES(balance)
+    $update = $pdo->prepare("
+        UPDATE account_balances
+        SET balance = balance + ?
+        WHERE currency = ?
     ");
 
-    $stmt->execute([
-        $currency,
-        $amount
+    $update->execute([
+        $amount,
+        $currency
     ]);
 
     $pdo->commit();
 
     jsonResponse([
         'success' => true,
-        'message' => "{$currency} opening balance created.",
         'currency' => $currency,
         'amount' => $amount
     ], 201);
@@ -134,6 +124,6 @@ try {
 
     jsonResponse([
         'success' => false,
-        'message' => 'Unable to create opening balance.'
-    ], 500);
+        'message' => $e->getMessage()
+    ], 400);
 }

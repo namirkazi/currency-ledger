@@ -1,0 +1,171 @@
+.page {
+  padding: 28px;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 26px;
+  color: #172033;
+}
+
+.header p {
+  margin: 6px 0 0;
+  color: #7b8492;
+  font-size: 13px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 460px) 1fr;
+  gap: 20px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e7eaf0;
+  border-radius: 14px;
+  padding: 22px;
+}
+
+.card h2 {
+  margin: 0 0 20px;
+  font-size: 16px;
+  color: #172033;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4d5665;
+}
+
+.field select,
+.field input,
+.field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dce1e8;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  outline: none;
+}
+
+.field textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.field select:focus,
+.field input:focus,
+.field textarea:focus {
+  border-color: #8995a8;
+}
+
+.message {
+  margin-bottom: 15px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: #f4f6f8;
+  color: #4d5665;
+  font-size: 13px;
+}
+
+.button {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #172033;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.list {
+  display: grid;
+  gap: 1px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 15px 0;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.rowLeft,
+.rowRight {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rowRight {
+  align-items: flex-end;
+}
+
+.currency {
+  font-size: 13px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.reason,
+.user {
+  color: #8a93a1;
+  font-size: 11px;
+}
+
+.amount {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.empty {
+  color: #8a93a1;
+  font-size: 13px;
+}
+
+@media (max-width: 850px) {
+  .page {
+    padding: 20px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 500px) {
+  .page {
+    padding: 15px;
+  }
+
+  .row {
+    align-items: flex-start;
+  }
+}
