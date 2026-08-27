@@ -20,10 +20,17 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // ─────────────────────────────────────────────
+  // AUTH
+  // ─────────────────────────────────────────────
+
   login: (username, password) =>
     request("auth/login.php", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({
+        username,
+        password,
+      }),
     }),
 
   logout: () =>
@@ -32,6 +39,10 @@ export const api = {
     }),
 
   me: () => request("auth/me.php"),
+
+  // ─────────────────────────────────────────────
+  // USERS
+  // ─────────────────────────────────────────────
 
   users: () => request("users/list.php"),
 
@@ -49,47 +60,84 @@ export const api = {
       }),
     }),
 
+  // ─────────────────────────────────────────────
+  // DASHBOARD
+  // ─────────────────────────────────────────────
+
   dashboard: () => request("dashboard.php"),
+
+  // ─────────────────────────────────────────────
+  // BALANCES
+  // ─────────────────────────────────────────────
 
   balances: () => request("balances.php"),
 
+  // ─────────────────────────────────────────────
+  // TRANSACTIONS
+  // ─────────────────────────────────────────────
+
   transactions: () => request("transactions.php"),
 
-  openingBalance: (currency, amount) =>
+  // ─────────────────────────────────────────────
+  // CURRENCIES
+  // ─────────────────────────────────────────────
+
+  currencies: () => request("currencies.php"),
+
+  // ─────────────────────────────────────────────
+  // OPENING BALANCE
+  // ─────────────────────────────────────────────
+
+  openingBalance: (currencyId, amount) =>
     request("opening-balance.php", {
       method: "POST",
       body: JSON.stringify({
-        currency,
+        currency_id: currencyId,
         amount,
       }),
     }),
 
-  buy: (usdtAmount, rate, requestId) =>
+  // ─────────────────────────────────────────────
+  // BUY
+  // ─────────────────────────────────────────────
+
+  buy: (currencyId, currencyAmount, rate, requestId) =>
     request("buy.php", {
       method: "POST",
       headers: {
         "X-Idempotency-Key": requestId,
       },
       body: JSON.stringify({
-        usdt_amount: usdtAmount,
+        currency_id: currencyId,
+        currency_amount: currencyAmount,
         rate,
         request_id: requestId,
       }),
     }),
 
-  sell: (usdtAmount, rate, requestId) =>
+  // ─────────────────────────────────────────────
+  // SELL
+  // ─────────────────────────────────────────────
+
+  sell: (currencyId, currencyAmount, rate, requestId) =>
     request("sell.php", {
       method: "POST",
       headers: {
         "X-Idempotency-Key": requestId,
       },
       body: JSON.stringify({
-        usdt_amount: usdtAmount,
+        currency_id: currencyId,
+        currency_amount: currencyAmount,
         rate,
         request_id: requestId,
       }),
     }),
 };
+
+// ─────────────────────────────────────────────
+// BALANCE MANAGEMENT
+// ─────────────────────────────────────────────
+
 export async function createBalanceMovement(data) {
   return request("balance-movement.php", {
     method: "POST",
@@ -99,4 +147,19 @@ export async function createBalanceMovement(data) {
 
 export async function getBalanceMovements() {
   return request("balance-movements.php");
+}
+
+// ─────────────────────────────────────────────
+// CURRENCY MANAGEMENT
+// ─────────────────────────────────────────────
+
+export async function getCurrencies() {
+  return request("currencies.php");
+}
+
+export async function addCurrency(data) {
+  return request("add-currency.php", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }

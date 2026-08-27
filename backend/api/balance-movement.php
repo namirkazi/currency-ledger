@@ -13,15 +13,23 @@ $data = json_decode(
     true
 );
 
-$currency = strtoupper(trim($data['currency'] ?? ''));
-$type = strtoupper(trim($data['movement_type'] ?? ''));
-$amount = trim((string) ($data['amount'] ?? ''));
-$reason = trim($data['reason'] ?? '');
+$currencyId = filter_var(
+    $data['currency_id'] ?? null,
+    FILTER_VALIDATE_INT
+);
 
-if (!in_array($currency, ['AED', 'USDT'], true)) {
+$type = strtoupper(
+    trim($data['movement_type'] ?? '')
+);
+
+$amount = decimalValue(
+    $data['amount'] ?? ''
+);
+
+if (!$currencyId || $currencyId <= 0) {
     jsonResponse([
         'success' => false,
-        'message' => 'Invalid currency.'
+        'message' => 'Valid currency is required.'
     ], 422);
 }
 
@@ -32,136 +40,133 @@ if (!in_array($type, ['INFLOW', 'OUTFLOW'], true)) {
     ], 422);
 }
 
-if (
-    $amount === '' ||
-    !preg_match('/^\d+(\.\d{1,6})?$/', $amount) ||
-    bccomp($amount, '0', 6) <= 0
-) {
+if (bccomp($amount, '0', 6) <= 0) {
     jsonResponse([
         'success' => false,
-        'message' => 'Invalid amount.'
-    ], 422);
-}
-
-if (strlen($reason) > 255) {
-    jsonResponse([
-        'success' => false,
-        'message' => 'Reason is too long.'
+        'message' => 'Amount must be greater than zero.'
     ], 422);
 }
 
 try {
+
     $pdo->beginTransaction();
 
-    /*
-     * Lock the currency balance.
-     */
+    // Lock the balance row.
     $balanceStmt = $pdo->prepare("
         SELECT balance
         FROM account_balances
-        WHERE currency = ?
+        WHERE currency_id = ?
         FOR UPDATE
     ");
 
-    $balanceStmt->execute([$currency]);
+    $balanceStmt->execute([
+        $currencyId
+    ]);
 
-    $currentBalance = $balanceStmt->fetchColumn();
+    $balance = $balanceStmt->fetchColumn();
 
-    if ($currentBalance === false) {
+    if ($balance === false) {
         throw new RuntimeException(
-            "{$currency} balance record does not exist."
+            'Balance record does not exist for this currency.'
         );
     }
 
-    /*
-     * Prevent negative balances.
-     */
+    // Currency.
+    $currencyStmt = $pdo->prepare("
+        SELECT id, code, name, symbol
+        FROM currencies
+        WHERE id = ?
+          AND active = 1
+        LIMIT 1
+    ");
+
+    $currencyStmt->execute([
+        $currencyId
+    ]);
+
+    $currency = $currencyStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$currency) {
+        throw new RuntimeException(
+            'Currency does not exist or is inactive.'
+        );
+    }
+
+    // Prevent negative balances.
     if (
         $type === 'OUTFLOW' &&
-        bccomp($currentBalance, $amount, 6) < 0
+        bccomp($balance, $amount, 6) < 0
     ) {
         throw new RuntimeException(
-            "Insufficient {$currency} balance."
+            "Insufficient {$currency['code']} balance."
         );
     }
 
-    /*
-     * Create the movement record.
-     */
+    // Create movement.
     $movementStmt = $pdo->prepare("
         INSERT INTO balance_movements
         (
-            currency,
+            currency_id,
             movement_type,
             amount,
-            reason,
             created_by
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?)
     ");
 
     $movementStmt->execute([
-        $currency,
+        $currencyId,
         $type,
         $amount,
-        $reason,
         $user['id']
     ]);
 
     $movementId = $pdo->lastInsertId();
 
-    /*
-     * Determine ledger amount.
-     */
-    $ledgerAmount = $type === 'INFLOW'
+    // Ledger amount.
+    $ledgerAmount =
+        $type === 'INFLOW'
         ? $amount
         : bcmul($amount, '-1', 6);
 
-    /*
-     * Create ledger entry.
-     *
-     * If your ledger_entries table uses a different
-     * entry_type value, use the value already defined
-     * in your schema.
-     */
+    // Ledger.
     $ledgerStmt = $pdo->prepare("
         INSERT INTO ledger_entries
         (
-            transaction_id,
+            currency_id,
+            balance_movement_id,
             entry_type,
-            currency,
             amount
         )
-        VALUES (NULL, 'BALANCE_MOVEMENT', ?, ?)
+        VALUES (?, ?, 'ADJUSTMENT', ?)
     ");
 
     $ledgerStmt->execute([
-        $currency,
+        $currencyId,
+        $movementId,
         $ledgerAmount
     ]);
 
-    /*
-     * Update synchronized balance projection.
-     */
+    // Update balance.
     if ($type === 'INFLOW') {
 
         $updateStmt = $pdo->prepare("
             UPDATE account_balances
             SET balance = balance + ?
-            WHERE currency = ?
+            WHERE currency_id = ?
         ");
     } else {
 
         $updateStmt = $pdo->prepare("
             UPDATE account_balances
             SET balance = balance - ?
-            WHERE currency = ?
+            WHERE currency_id = ?
         ");
     }
 
     $updateStmt->execute([
         $amount,
-        $currency
+        $currencyId
     ]);
 
     $pdo->commit();
@@ -169,16 +174,20 @@ try {
     jsonResponse([
         'success' => true,
         'movement_id' => $movementId,
-        'currency' => $currency,
+        'currency_id' => (int) $currencyId,
+        'currency_code' => $currency['code'],
         'movement_type' => $type,
-        'amount' => $amount,
-        'reason' => $reason
+        'amount' => $amount
     ], 201);
 } catch (Throwable $e) {
 
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
+
+    error_log(
+        'balance-movement.php: ' . $e->getMessage()
+    );
 
     jsonResponse([
         'success' => false,

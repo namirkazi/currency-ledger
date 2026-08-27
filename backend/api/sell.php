@@ -8,80 +8,211 @@ require_once __DIR__ . '/../helpers/validation.php';
 
 $user = requireAuth();
 
-$data = json_decode(file_get_contents('php://input'), true);
+$data = json_decode(
+    file_get_contents('php://input'),
+    true
+);
 
-$usdt = decimalValue($data['usdt_amount'] ?? '');
-$rate = decimalValue($data['rate'] ?? '');
+$currencyId = filter_var(
+    $data['currency_id'] ?? null,
+    FILTER_VALIDATE_INT
+);
+
+$currencyAmount = decimalValue(
+    $data['currency_amount'] ?? ''
+);
+
+$rate = decimalValue(
+    $data['rate'] ?? ''
+);
 
 $requestId =
     $_SERVER['HTTP_X_IDEMPOTENCY_KEY']
     ?? trim($data['request_id'] ?? '');
 
-if (!preg_match(
-    '/^[a-f0-9-]{16,64}$/i',
-    $requestId
-)) {
+if (!$currencyId || $currencyId <= 0) {
+    jsonResponse([
+        'success' => false,
+        'message' => 'Valid currency is required.'
+    ], 422);
+}
+
+if (
+    !preg_match(
+        '/^[a-f0-9-]{16,64}$/i',
+        $requestId
+    )
+) {
     jsonResponse([
         'success' => false,
         'message' => 'Valid request ID is required.'
     ], 422);
 }
 
-$aed = bcmul($usdt, $rate, 6);
+if (
+    bccomp($currencyAmount, '0', 6) <= 0
+) {
+    jsonResponse([
+        'success' => false,
+        'message' => 'Currency amount must be greater than zero.'
+    ], 422);
+}
+
+if (
+    bccomp($rate, '0', 6) <= 0
+) {
+    jsonResponse([
+        'success' => false,
+        'message' => 'Rate must be greater than zero.'
+    ], 422);
+}
 
 try {
 
     $pdo->beginTransaction();
 
-    $existing = $pdo->prepare("
+    /*
+     * Idempotency.
+     */
+    $existingStmt = $pdo->prepare("
         SELECT *
         FROM transactions
         WHERE request_id = ?
         FOR UPDATE
     ");
 
-    $existing->execute([$requestId]);
+    $existingStmt->execute([$requestId]);
 
-    $existingTransaction = $existing->fetch();
+    $existing = $existingStmt->fetch();
 
-    if ($existingTransaction) {
+    if ($existing) {
+
         $pdo->commit();
 
         jsonResponse([
             'success' => true,
             'duplicate' => true,
-            'transaction' => $existingTransaction
+            'transaction' => $existing
         ]);
     }
 
     /*
-     * Lock USDT balance before checking it.
+     * Currency must exist and be active.
      */
-    $balanceStmt = $pdo->prepare("
-        SELECT balance
-        FROM account_balances
-        WHERE currency = 'USDT'
-        FOR UPDATE
+    $currencyStmt = $pdo->prepare("
+        SELECT
+            id,
+            code,
+            name
+        FROM currencies
+        WHERE id = ?
+          AND active = 1
+        LIMIT 1
     ");
 
-    $balanceStmt->execute();
+    $currencyStmt->execute([$currencyId]);
 
-    $balance = $balanceStmt->fetchColumn();
+    $currency = $currencyStmt->fetch();
 
-    if ($balance === false) {
+    if (!$currency) {
         throw new RuntimeException(
-            'USDT balance record does not exist.'
-        );
-    }
-
-    if (bccomp($balance, $usdt, 6) < 0) {
-        throw new RuntimeException(
-            'Insufficient USDT balance.'
+            'Currency does not exist or is inactive.'
         );
     }
 
     /*
-     * Get inventory lots in acquisition order.
+     * Get USD.
+     */
+    $usdStmt = $pdo->query("
+        SELECT id
+        FROM currencies
+        WHERE code = 'USD'
+        LIMIT 1
+    ");
+
+    $usdCurrencyId = $usdStmt->fetchColumn();
+
+    if (!$usdCurrencyId) {
+        throw new RuntimeException(
+            'USD currency is not configured.'
+        );
+    }
+
+    if ((int) $currencyId === (int) $usdCurrencyId) {
+        throw new RuntimeException(
+            'USD cannot be traded against itself.'
+        );
+    }
+
+    /*
+     * USD proceeds.
+     */
+    $usdAmount = bcmul(
+        $currencyAmount,
+        $rate,
+        6
+    );
+
+    /*
+     * Ensure balance rows exist.
+     */
+    $ensureBalance = $pdo->prepare("
+        INSERT IGNORE INTO account_balances
+            (currency_id, balance)
+        VALUES
+            (?, 0)
+    ");
+
+    $ensureBalance->execute([$currencyId]);
+    $ensureBalance->execute([$usdCurrencyId]);
+
+    /*
+     * Lock both balances.
+     */
+    $balanceStmt = $pdo->prepare("
+        SELECT
+            currency_id,
+            balance
+        FROM account_balances
+        WHERE currency_id IN (?, ?)
+        ORDER BY currency_id
+        FOR UPDATE
+    ");
+
+    $balanceStmt->execute([
+        $currencyId,
+        $usdCurrencyId
+    ]);
+
+    $balances = [];
+
+    while ($row = $balanceStmt->fetch()) {
+        $balances[(int) $row['currency_id']] = $row['balance'];
+    }
+
+    if (!isset($balances[(int) $currencyId])) {
+        throw new RuntimeException(
+            'Currency balance record does not exist.'
+        );
+    }
+
+    /*
+     * SELL requires sufficient traded currency.
+     */
+    if (
+        bccomp(
+            $balances[(int) $currencyId],
+            $currencyAmount,
+            6
+        ) < 0
+    ) {
+        throw new RuntimeException(
+            "Insufficient {$currency['code']} balance."
+        );
+    }
+
+    /*
+     * Get FIFO inventory for THIS currency only.
      */
     $lotsStmt = $pdo->prepare("
         SELECT
@@ -89,21 +220,29 @@ try {
             remaining_amount,
             acquisition_rate
         FROM inventory_lots
-        WHERE remaining_amount > 0
+        WHERE currency_id = ?
+          AND remaining_amount > 0
         ORDER BY acquired_at ASC, id ASC
         FOR UPDATE
     ");
 
-    $lotsStmt->execute();
+    $lotsStmt->execute([
+        $currencyId
+    ]);
 
     $lots = $lotsStmt->fetchAll();
 
-    $remaining = $usdt;
+    /*
+     * Calculate acquisition cost.
+     */
+    $remaining = $currencyAmount;
     $cost = '0.000000';
 
     foreach ($lots as $lot) {
 
-        if (bccomp($remaining, '0', 6) <= 0) {
+        if (
+            bccomp($remaining, '0', 6) <= 0
+        ) {
             break;
         }
 
@@ -134,52 +273,84 @@ try {
         );
     }
 
-    if (bccomp($remaining, '0', 6) > 0) {
+    if (
+        bccomp($remaining, '0', 6) > 0
+    ) {
         throw new RuntimeException(
             'Insufficient inventory for this sale.'
         );
     }
 
+    /*
+     * Profit is ALWAYS USD.
+     */
     $profit = bcsub(
-        $aed,
+        $usdAmount,
         $cost,
         6
     );
 
-    $stmt = $pdo->prepare("
+    /*
+     * Create transaction.
+     */
+    $transactionStmt = $pdo->prepare("
         INSERT INTO transactions
         (
             request_id,
             type,
-            usdt_amount,
+            currency_amount,
             rate,
-            aed_amount,
+            usd_amount,
             realized_profit,
-            created_by
+            status,
+            created_by,
+            currency_id
         )
         VALUES
-        (?, 'SELL_USDT', ?, ?, ?, ?, ?)
+        (?, 'SELL', ?, ?, ?, ?, 'COMPLETED', ?, ?)
     ");
 
-    $stmt->execute([
+    $transactionStmt->execute([
         $requestId,
-        $usdt,
+        $currencyAmount,
         $rate,
-        $aed,
+        $usdAmount,
         $profit,
-        $user['id']
+        $user['id'],
+        $currencyId
     ]);
 
     $transactionId = $pdo->lastInsertId();
 
     /*
-     * Consume inventory lots.
+     * Consume FIFO inventory.
      */
-    $remaining = $usdt;
+    $remaining = $currencyAmount;
+
+    $allocationStmt = $pdo->prepare("
+        INSERT INTO sale_allocations
+        (
+            transaction_id,
+            inventory_lot_id,
+            currency_amount,
+            acquisition_rate,
+            cost_amount
+        )
+        VALUES
+        (?, ?, ?, ?, ?)
+    ");
+
+    $updateLotStmt = $pdo->prepare("
+        UPDATE inventory_lots
+        SET remaining_amount = remaining_amount - ?
+        WHERE id = ?
+    ");
 
     foreach ($lots as $lot) {
 
-        if (bccomp($remaining, '0', 6) <= 0) {
+        if (
+            bccomp($remaining, '0', 6) <= 0
+        ) {
             break;
         }
 
@@ -191,26 +362,13 @@ try {
             ? $lot['remaining_amount']
             : $remaining;
 
-        $stmt = $pdo->prepare("
-            INSERT INTO sale_allocations
-            (
-                transaction_id,
-                inventory_lot_id,
-                usdt_amount,
-                acquisition_rate,
-                cost_amount
-            )
-            VALUES
-            (?, ?, ?, ?, ?)
-        ");
-
         $lotCost = bcmul(
             $take,
             $lot['acquisition_rate'],
             6
         );
 
-        $stmt->execute([
+        $allocationStmt->execute([
             $transactionId,
             $lot['id'],
             $take,
@@ -218,13 +376,7 @@ try {
             $lotCost
         ]);
 
-        $stmt = $pdo->prepare("
-            UPDATE inventory_lots
-            SET remaining_amount = remaining_amount - ?
-            WHERE id = ?
-        ");
-
-        $stmt->execute([
+        $updateLotStmt->execute([
             $take,
             $lot['id']
         ]);
@@ -236,50 +388,75 @@ try {
         );
     }
 
-    $ledger = $pdo->prepare("
+    /*
+     * Ledger:
+     *
+     * Traded currency leaves.
+     * USD enters.
+     */
+    $ledgerStmt = $pdo->prepare("
         INSERT INTO ledger_entries
-            (transaction_id, entry_type, currency, amount)
+        (
+            currency_id,
+            transaction_id,
+            entry_type,
+            amount
+        )
         VALUES
-            (?, 'TRADE', ?, ?)
+        (?, ?, 'TRADE', ?)
     ");
 
-    $ledger->execute([
+    $ledgerStmt->execute([
+        $currencyId,
         $transactionId,
-        'AED',
-        $aed
+        bcmul($currencyAmount, '-1', 6)
     ]);
 
-    $ledger->execute([
+    $ledgerStmt->execute([
+        $usdCurrencyId,
         $transactionId,
-        'USDT',
-        bcmul($usdt, '-1', 6)
+        $usdAmount
     ]);
 
-    $update = $pdo->prepare("
-        UPDATE account_balances
-        SET balance = balance + ?
-        WHERE currency = 'AED'
-    ");
-
-    $update->execute([$aed]);
-
-    $update = $pdo->prepare("
+    /*
+     * Traded currency decreases.
+     */
+    $updateCurrency = $pdo->prepare("
         UPDATE account_balances
         SET balance = balance - ?
-        WHERE currency = 'USDT'
+        WHERE currency_id = ?
     ");
 
-    $update->execute([$usdt]);
+    $updateCurrency->execute([
+        $currencyAmount,
+        $currencyId
+    ]);
+
+    /*
+     * USD increases.
+     */
+    $updateUsd = $pdo->prepare("
+        UPDATE account_balances
+        SET balance = balance + ?
+        WHERE currency_id = ?
+    ");
+
+    $updateUsd->execute([
+        $usdAmount,
+        $usdCurrencyId
+    ]);
 
     $pdo->commit();
 
     jsonResponse([
         'success' => true,
         'transaction_id' => $transactionId,
-        'type' => 'SELL_USDT',
-        'usdt_amount' => $usdt,
+        'type' => 'SELL',
+        'currency_id' => (int) $currencyId,
+        'currency_code' => $currency['code'],
+        'currency_amount' => $currencyAmount,
         'rate' => $rate,
-        'aed_amount' => $aed,
+        'usd_amount' => $usdAmount,
         'cost' => $cost,
         'profit' => $profit
     ], 201);

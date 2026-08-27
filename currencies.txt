@@ -1,0 +1,9 @@
+inr
+pkr
+usd
+gpd
+Saudi riyal
+omani riyal
+bahrani dinar
+Qatari riyal
+Kuwait dinar

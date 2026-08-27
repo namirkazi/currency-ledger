@@ -5,7 +5,6 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/auth.php';
 require_once __DIR__ . '/../helpers/response.php';
 require_once __DIR__ . '/../helpers/validation.php';
-require_once __DIR__ . '/../helpers/ledger.php';
 
 $user = requireAuth();
 
@@ -14,24 +13,59 @@ $data = json_decode(
     true
 );
 
-$usdt = decimalValue($data['usdt_amount'] ?? '');
-$rate = decimalValue($data['rate'] ?? '');
+$currencyId = filter_var(
+    $data['currency_id'] ?? null,
+    FILTER_VALIDATE_INT
+);
+
+$currencyAmount = decimalValue(
+    $data['currency_amount'] ?? ''
+);
+
+$rate = decimalValue(
+    $data['rate'] ?? ''
+);
 
 $requestId =
     $_SERVER['HTTP_X_IDEMPOTENCY_KEY']
     ?? trim($data['request_id'] ?? '');
 
-if (!preg_match(
-    '/^[a-f0-9-]{16,64}$/i',
-    $requestId
-)) {
+if (!$currencyId || $currencyId <= 0) {
+    jsonResponse([
+        'success' => false,
+        'message' => 'Valid currency is required.'
+    ], 422);
+}
+
+if (
+    !preg_match(
+        '/^[a-f0-9-]{16,64}$/i',
+        $requestId
+    )
+) {
     jsonResponse([
         'success' => false,
         'message' => 'Valid request ID is required.'
     ], 422);
 }
 
-$aed = calculateAed($usdt, $rate);
+if (
+    bccomp($currencyAmount, '0', 6) <= 0
+) {
+    jsonResponse([
+        'success' => false,
+        'message' => 'Currency amount must be greater than zero.'
+    ], 422);
+}
+
+if (
+    bccomp($rate, '0', 6) <= 0
+) {
+    jsonResponse([
+        'success' => false,
+        'message' => 'Rate must be greater than zero.'
+    ], 422);
+}
 
 try {
 
@@ -40,164 +74,274 @@ try {
     /*
      * Idempotency check.
      */
-    $existing = $pdo->prepare("
+    $existingStmt = $pdo->prepare("
         SELECT *
         FROM transactions
         WHERE request_id = ?
         FOR UPDATE
     ");
 
-    $existing->execute([$requestId]);
+    $existingStmt->execute([$requestId]);
 
-    $existingTransaction = $existing->fetch();
+    $existing = $existingStmt->fetch();
 
-    if ($existingTransaction) {
+    if ($existing) {
+
         $pdo->commit();
 
         jsonResponse([
             'success' => true,
             'duplicate' => true,
-            'transaction' => $existingTransaction
+            'transaction' => $existing
         ]);
     }
 
     /*
-     * Lock AED balance.
+     * Make sure the currency exists and is active.
      */
-    $balanceStmt = $pdo->prepare("
-        SELECT balance
-        FROM account_balances
-        WHERE currency = 'AED'
-        FOR UPDATE
+    $currencyStmt = $pdo->prepare("
+        SELECT
+            id,
+            code,
+            name
+        FROM currencies
+        WHERE id = ?
+          AND active = 1
+        LIMIT 1
     ");
 
-    $balanceStmt->execute();
+    $currencyStmt->execute([$currencyId]);
 
-    $balance = $balanceStmt->fetchColumn();
+    $currency = $currencyStmt->fetch();
 
-    if ($balance === false) {
+    if (!$currency) {
         throw new RuntimeException(
-            'AED balance record does not exist.'
+            'Currency does not exist or is inactive.'
         );
     }
 
-    if (bccomp($balance, $aed, 6) < 0) {
+    /*
+     * USD is the settlement/profit currency.
+     * Trading USD against USD makes no sense.
+     */
+    $usdStmt = $pdo->query("
+        SELECT id
+        FROM currencies
+        WHERE code = 'USD'
+        LIMIT 1
+    ");
+
+    $usdCurrencyId = $usdStmt->fetchColumn();
+
+    if (!$usdCurrencyId) {
         throw new RuntimeException(
-            'Insufficient AED balance.'
+            'USD currency is not configured.'
+        );
+    }
+
+    if ((int) $currencyId === (int) $usdCurrencyId) {
+        throw new RuntimeException(
+            'USD cannot be traded against itself.'
+        );
+    }
+
+    /*
+     * USD amount = currency amount × USD rate.
+     */
+    $usdAmount = bcmul(
+        $currencyAmount,
+        $rate,
+        6
+    );
+
+    /*
+     * Ensure balance rows exist.
+     */
+    $ensureBalance = $pdo->prepare("
+        INSERT IGNORE INTO account_balances
+            (currency_id, balance)
+        VALUES
+            (?, 0)
+    ");
+
+    $ensureBalance->execute([$currencyId]);
+    $ensureBalance->execute([$usdCurrencyId]);
+
+    /*
+     * Lock both balances.
+     *
+     * We always lock the two currencies together so
+     * concurrent trades cannot spend the same USD.
+     */
+    $balanceStmt = $pdo->prepare("
+        SELECT
+            currency_id,
+            balance
+        FROM account_balances
+        WHERE currency_id IN (?, ?)
+        ORDER BY currency_id
+        FOR UPDATE
+    ");
+
+    $balanceStmt->execute([
+        $currencyId,
+        $usdCurrencyId
+    ]);
+
+    $balances = [];
+
+    while ($row = $balanceStmt->fetch()) {
+        $balances[(int) $row['currency_id']] = $row['balance'];
+    }
+
+    if (!isset($balances[(int) $usdCurrencyId])) {
+        throw new RuntimeException(
+            'USD balance record does not exist.'
+        );
+    }
+
+    /*
+     * BUY requires sufficient USD.
+     */
+    if (
+        bccomp(
+            $balances[(int) $usdCurrencyId],
+            $usdAmount,
+            6
+        ) < 0
+    ) {
+        throw new RuntimeException(
+            'Insufficient USD balance.'
         );
     }
 
     /*
      * Create transaction.
      */
-    $stmt = $pdo->prepare("
+    $transactionStmt = $pdo->prepare("
         INSERT INTO transactions
         (
             request_id,
             type,
-            usdt_amount,
+            currency_amount,
             rate,
-            aed_amount,
+            usd_amount,
             realized_profit,
-            created_by
+            status,
+            created_by,
+            currency_id
         )
         VALUES
-        (?, 'BUY_USDT', ?, ?, ?, 0, ?)
+        (?, 'BUY', ?, ?, ?, 0, 'COMPLETED', ?, ?)
     ");
 
-    $stmt->execute([
+    $transactionStmt->execute([
         $requestId,
-        $usdt,
+        $currencyAmount,
         $rate,
-        $aed,
-        $user['id']
+        $usdAmount,
+        $user['id'],
+        $currencyId
     ]);
 
     $transactionId = $pdo->lastInsertId();
 
     /*
-     * Create ledger entries.
+     * Ledger entries:
+     *
+     * Selected currency enters.
+     * USD leaves.
      */
-    $ledger = $pdo->prepare("
+    $ledgerStmt = $pdo->prepare("
         INSERT INTO ledger_entries
-            (transaction_id, entry_type, currency, amount)
+        (
+            currency_id,
+            transaction_id,
+            entry_type,
+            amount
+        )
         VALUES
-            (?, 'TRADE', ?, ?)
+        (?, ?, 'TRADE', ?)
     ");
 
-    // AED leaves the business.
-    $ledger->execute([
+    $ledgerStmt->execute([
+        $currencyId,
         $transactionId,
-        'AED',
-        bcmul($aed, '-1', 6)
+        $currencyAmount
     ]);
 
-    // USDT enters the business.
-    $ledger->execute([
+    $ledgerStmt->execute([
+        $usdCurrencyId,
         $transactionId,
-        'USDT',
-        $usdt
+        bcmul($usdAmount, '-1', 6)
     ]);
 
     /*
-     * Create USDT inventory lot.
+     * Create inventory lot.
      *
-     * This is what allows SELL to determine
-     * the acquisition cost and realized profit.
+     * Acquisition rate is always USD per unit
+     * of the traded currency.
      */
-    $inventory = $pdo->prepare("
+    $inventoryStmt = $pdo->prepare("
         INSERT INTO inventory_lots
         (
             source_transaction_id,
             original_amount,
             remaining_amount,
-            acquisition_rate
+            acquisition_rate,
+            currency_id
         )
         VALUES
-        (?, ?, ?, ?)
+        (?, ?, ?, ?, ?)
     ");
 
-    $inventory->execute([
+    $inventoryStmt->execute([
         $transactionId,
-        $usdt,
-        $usdt,
-        $rate
+        $currencyAmount,
+        $currencyAmount,
+        $rate,
+        $currencyId
     ]);
 
     /*
-     * Update AED balance.
+     * USD decreases.
      */
-    $update = $pdo->prepare("
+    $updateUsd = $pdo->prepare("
         UPDATE account_balances
         SET balance = balance - ?
-        WHERE currency = 'AED'
+        WHERE currency_id = ?
     ");
 
-    $update->execute([$aed]);
+    $updateUsd->execute([
+        $usdAmount,
+        $usdCurrencyId
+    ]);
 
     /*
-     * Update USDT balance.
+     * Traded currency increases.
      */
-    $update = $pdo->prepare("
+    $updateCurrency = $pdo->prepare("
         UPDATE account_balances
         SET balance = balance + ?
-        WHERE currency = 'USDT'
+        WHERE currency_id = ?
     ");
 
-    $update->execute([$usdt]);
+    $updateCurrency->execute([
+        $currencyAmount,
+        $currencyId
+    ]);
 
-    /*
-     * Everything succeeded.
-     */
     $pdo->commit();
 
     jsonResponse([
         'success' => true,
         'transaction_id' => $transactionId,
-        'type' => 'BUY_USDT',
-        'usdt_amount' => $usdt,
+        'type' => 'BUY',
+        'currency_id' => (int) $currencyId,
+        'currency_code' => $currency['code'],
+        'currency_amount' => $currencyAmount,
         'rate' => $rate,
-        'aed_amount' => $aed,
+        'usd_amount' => $usdAmount,
         'profit' => '0.000000'
     ], 201);
 } catch (Throwable $e) {

@@ -1,181 +1,284 @@
-import { useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
-import { api } from '../services/api';
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../services/api";
+import styles from "./Trading.module.css";
 
-function requestId() {
-    if (crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
+function createRequestId() {
+  if (crypto?.randomUUID) {
+    return crypto.randomUUID();
+  }
 
-    return `${Date.now()}-${Math.random()
-        .toString(16)
-        .slice(2)}`;
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatNumber(value) {
+  if (value === "" || value === null || value === undefined) {
+    return "0.000000";
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "0.000000";
+  }
+
+  return number.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  });
 }
 
 export default function Trading() {
-    const [type, setType] = useState('BUY_USDT');
-    const [usdt, setUsdt] = useState('');
-    const [rate, setRate] = useState('');
-    const [result, setResult] = useState(null);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+  const [currencies, setCurrencies] = useState([]);
 
-    const aed =
-        usdt && rate
-            ? Number(usdt) * Number(rate)
-            : 0;
+  const [currencyId, setCurrencyId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [rate, setRate] = useState("");
 
-    async function submit(e) {
-        e.preventDefault();
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-        setError('');
-        setResult(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-        if (!usdt || !rate || Number(usdt) <= 0 || Number(rate) <= 0) {
-            setError('Enter a valid USDT amount and rate.');
-            return;
-        }
+  const [activeType, setActiveType] = useState("BUY");
 
-        setLoading(true);
+  const selectedCurrency = useMemo(
+    () =>
+      currencies.find((currency) => Number(currency.id) === Number(currencyId)),
+    [currencies, currencyId],
+  );
 
-        try {
-            const id = requestId();
+  const usdAmount = useMemo(() => {
+    const numericAmount = Number(amount);
+    const numericRate = Number(rate);
 
-            const response =
-                type === 'BUY_USDT'
-                    ? await api.buy(usdt, rate, id)
-                    : await api.sell(usdt, rate, id);
-
-            setResult(response);
-            setUsdt('');
-            setRate('');
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
+    if (
+      !Number.isFinite(numericAmount) ||
+      !Number.isFinite(numericRate) ||
+      numericAmount <= 0 ||
+      numericRate <= 0
+    ) {
+      return "";
     }
 
-    return (
-        <>
-            <div className="page-heading">
-                <div>
-                    <h2>Trading</h2>
-                    <p>Record physical AED / USDT trades.</p>
-                </div>
-            </div>
+    return numericAmount * numericRate;
+  }, [amount, rate]);
 
-            <div className="trade-layout">
-                <div className="trade-card">
-                    <div className="trade-tabs">
-                        <button
-                            className={type === 'BUY_USDT' ? 'active buy-tab' : ''}
-                            onClick={() => setType('BUY_USDT')}
-                            type="button"
-                        >
-                            <ArrowDownToLine size={18} />
-                            Buy USDT
-                        </button>
+  useEffect(() => {
+    loadCurrencies();
+  }, []);
 
-                        <button
-                            className={type === 'SELL_USDT' ? 'active sell-tab' : ''}
-                            onClick={() => setType('SELL_USDT')}
-                            type="button"
-                        >
-                            <ArrowUpFromLine size={18} />
-                            Sell USDT
-                        </button>
-                    </div>
+  async function loadCurrencies() {
+    try {
+      setLoadingCurrencies(true);
+      setError("");
 
-                    <form onSubmit={submit}>
-                        <label>
-                            USDT Amount
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.000001"
-                                value={usdt}
-                                onChange={(e) => setUsdt(e.target.value)}
-                                placeholder="100000"
-                            />
-                        </label>
+      const response = await api.currencies();
 
-                        <label>
-                            Rate
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.000001"
-                                value={rate}
-                                onChange={(e) => setRate(e.target.value)}
-                                placeholder="3.66"
-                            />
-                        </label>
+      const list = response.currencies || response.data?.currencies || [];
 
-                        <div className="calculation">
-                            <span>AED Amount</span>
-                            <strong>
-                                {aed.toLocaleString('en-US', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 6
-                                })}
-                                {' AED'}
-                            </strong>
-                        </div>
+      const tradable = list.filter(
+        (currency) =>
+          Number(currency.id) !==
+          Number(
+            list.find((item) => String(item.code).toUpperCase() === "USD")?.id,
+          ),
+      );
 
-                        {error && (
-                            <div className="form-error">
-                                {error}
-                            </div>
-                        )}
+      setCurrencies(tradable);
 
-                        {result && (
-                            <div className="form-success">
-                                Transaction completed.
-                                {result.profit && (
-                                    <> Profit: {result.profit} AED</>
-                                )}
-                            </div>
-                        )}
+      if (tradable.length > 0) {
+        setCurrencyId(String(tradable[0].id));
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingCurrencies(false);
+    }
+  }
 
-                        <button
-                            className={`primary-button ${type === 'SELL_USDT'
-                                ? 'sell-button'
-                                : ''
-                                }`}
-                            disabled={loading}
-                        >
-                            {loading
-                                ? 'Processing...'
-                                : type === 'BUY_USDT'
-                                    ? 'Complete Buy'
-                                    : 'Complete Sell'}
-                        </button>
-                    </form>
-                </div>
+  function resetForm() {
+    setAmount("");
+    setRate("");
+  }
 
-                <div className="trade-info">
-                    <h3>
-                        {type === 'BUY_USDT'
-                            ? 'Buy USDT'
-                            : 'Sell USDT'}
-                    </h3>
+  async function handleSubmit(event) {
+    event.preventDefault();
 
-                    <p>
-                        {type === 'BUY_USDT'
-                            ? 'AED decreases and USDT increases.'
-                            : 'USDT decreases and AED increases.'}
-                    </p>
+    setError("");
+    setMessage("");
 
-                    <div className="formula">
-                        <span>USDT</span>
-                        <b>×</b>
-                        <span>Rate</span>
-                        <b>=</b>
-                        <strong>AED</strong>
-                    </div>
-                </div>
-            </div>
-        </>
-    );
+    if (!currencyId) {
+      setError("Please select a currency.");
+      return;
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+
+    if (!rate || Number(rate) <= 0) {
+      setError("Enter a valid rate.");
+      return;
+    }
+
+    const requestId = createRequestId();
+
+    try {
+      setLoading(true);
+
+      const result =
+        activeType === "BUY"
+          ? await api.buy(Number(currencyId), amount, rate, requestId)
+          : await api.sell(Number(currencyId), amount, rate, requestId);
+
+      if (activeType === "BUY") {
+        setMessage(
+          `Bought ${formatNumber(amount)} ${
+            selectedCurrency?.code || ""
+          } for ${formatNumber(result.usd_amount)} USD.`,
+        );
+      } else {
+        setMessage(
+          `Sold ${formatNumber(amount)} ${
+            selectedCurrency?.code || ""
+          } for ${formatNumber(result.usd_amount)} USD. Profit: ${formatNumber(
+            result.profit,
+          )} USD.`,
+        );
+      }
+
+      resetForm();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <div>
+          <h1>Trading</h1>
+          <p>Buy and sell currencies against USD.</p>
+        </div>
+      </div>
+
+      <div className={styles.tradeTabs}>
+        <button
+          type="button"
+          className={activeType === "BUY" ? styles.activeTab : ""}
+          onClick={() => {
+            setActiveType("BUY");
+            setError("");
+            setMessage("");
+          }}
+        >
+          Buy
+        </button>
+
+        <button
+          type="button"
+          className={activeType === "SELL" ? styles.activeTab : ""}
+          onClick={() => {
+            setActiveType("SELL");
+            setError("");
+            setMessage("");
+          }}
+        >
+          Sell
+        </button>
+      </div>
+
+      <form className={styles.tradeCard} onSubmit={handleSubmit}>
+        <div className={styles.formGrid}>
+          <div className={styles.field}>
+            <label>Currency</label>
+
+            <select
+              value={currencyId}
+              onChange={(event) => setCurrencyId(event.target.value)}
+              disabled={loadingCurrencies || loading}
+            >
+              {loadingCurrencies && (
+                <option value="">Loading currencies...</option>
+              )}
+
+              {!loadingCurrencies && currencies.length === 0 && (
+                <option value="">No currencies available</option>
+              )}
+
+              {currencies.map((currency) => (
+                <option key={currency.id} value={currency.id}>
+                  {currency.code}
+                  {currency.name ? ` — ${currency.name}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.field}>
+            <label>{selectedCurrency?.code || "Currency"} Amount</label>
+
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="0.000000"
+              disabled={loading}
+              required
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label>USD Rate per {selectedCurrency?.code || "currency"}</label>
+
+            <input
+              type="text"
+              inputMode="decimal"
+              value={rate}
+              onChange={(event) => setRate(event.target.value)}
+              placeholder="0.000000"
+              disabled={loading}
+              required
+            />
+          </div>
+        </div>
+
+        <div className={styles.calculation}>
+          <div>
+            <span>{activeType === "BUY" ? "You pay" : "You receive"}</span>
+
+            <strong>{formatNumber(usdAmount)} USD</strong>
+          </div>
+        </div>
+
+        {activeType === "SELL" && (
+          <div className={styles.info}>
+            Profit is calculated by the server from the actual inventory
+            acquisition cost.
+          </div>
+        )}
+
+        {error && <div className={styles.error}>{error}</div>}
+
+        {message && <div className={styles.success}>{message}</div>}
+
+        <button
+          type="submit"
+          className={styles.submit}
+          disabled={loading || loadingCurrencies || !currencyId}
+        >
+          {loading
+            ? "Processing..."
+            : activeType === "BUY"
+              ? `Buy ${selectedCurrency?.code || ""}`
+              : `Sell ${selectedCurrency?.code || ""}`}
+        </button>
+      </form>
+    </div>
+  );
 }

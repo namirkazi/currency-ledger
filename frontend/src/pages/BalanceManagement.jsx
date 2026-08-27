@@ -39,10 +39,9 @@ export default function BalanceManagement() {
 
     try {
       await createBalanceMovement({
-        currency,
+        currency_id: currencyId,
         movement_type: type,
         amount,
-        reason: reason.trim(),
       });
 
       setAmount("");
@@ -62,7 +61,7 @@ export default function BalanceManagement() {
       <div className={styles.header}>
         <h1>Balance Management</h1>
 
-        <p>Record AED or USDT entering or leaving the trading operation.</p>
+        <p>Record AED or USD entering or leaving the trading operation.</p>
       </div>
 
       <div className={styles.grid}>
@@ -79,7 +78,7 @@ export default function BalanceManagement() {
             >
               <option value="AED">AED</option>
 
-              <option value="USDT">USDT</option>
+              <option value="USD">USD</option>
             </select>
           </div>
 

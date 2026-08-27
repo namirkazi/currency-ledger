@@ -35,7 +35,7 @@ export default function Layout() {
           <div className="brand-mark">CL</div>
           <div>
             <strong>Currency Ledger</strong>
-            <span>AED / USDT</span>
+            <span>AED / USD</span>
           </div>
         </div>
 
@@ -51,6 +51,12 @@ export default function Layout() {
           <NavLink to="/opening-balances" onClick={() => setOpen(false)}>
             <SquareChartGantt size={19} />
             Opening Balance
+          </NavLink>
+        </nav>
+        <nav>
+          <NavLink to="/currencies" onClick={() => setOpen(false)}>
+            <WalletCards size={19} />
+            Currencies
           </NavLink>
         </nav>
         <nav>

@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-
+import Currencies from "./pages/Currencies";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Trading from "./pages/Trading";
@@ -30,7 +30,7 @@ export default function App() {
             <Route path="/opening-balances" element={<OpeningBalance />} />
 
             <Route path="/reports" element={<Reports />} />
-
+            <Route path="/currencies" element={<Currencies />} />
             <Route path="/reconciliation" element={<Reconciliation />} />
             <Route path="/balance-management" element={<BalanceManagement />} />
             <Route element={<ProtectedRoute adminOnly />}>

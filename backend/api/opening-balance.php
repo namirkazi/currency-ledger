@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/cors.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../helpers/auth.php';
 require_once __DIR__ . '/../helpers/response.php';
+require_once __DIR__ . '/../helpers/validation.php';
 
 $user = requireAdmin();
 
@@ -12,24 +13,26 @@ $data = json_decode(
     true
 );
 
-$currency = strtoupper(trim($data['currency'] ?? ''));
-$amount = trim((string) ($data['amount'] ?? ''));
+$currencyId = filter_var(
+    $data['currency_id'] ?? null,
+    FILTER_VALIDATE_INT
+);
 
-if (!in_array($currency, ['AED', 'USDT'], true)) {
+$amount = decimalValue(
+    $data['amount'] ?? ''
+);
+
+if (!$currencyId || $currencyId <= 0) {
     jsonResponse([
         'success' => false,
-        'message' => 'Invalid currency.'
+        'message' => 'Valid currency is required.'
     ], 422);
 }
 
-if (
-    $amount === '' ||
-    !preg_match('/^\d+(\.\d{1,6})?$/', $amount) ||
-    bccomp($amount, '0', 6) < 0
-) {
+if (bccomp($amount, '0', 6) <= 0) {
     jsonResponse([
         'success' => false,
-        'message' => 'Invalid amount.'
+        'message' => 'Amount must be greater than zero.'
     ], 422);
 }
 
@@ -38,83 +41,135 @@ try {
     $pdo->beginTransaction();
 
     /*
-     * Opening balance is only allowed once
-     * for each individual currency.
+     * Make sure the currency exists and is active.
      */
-    $check = $pdo->prepare("
-        SELECT id
-        FROM opening_balances
-        WHERE currency = ?
+    $currencyStmt = $pdo->prepare("
+        SELECT
+            id,
+            code,
+            name,
+            symbol
+        FROM currencies
+        WHERE id = ?
+          AND active = 1
         LIMIT 1
     ");
 
-    $check->execute([$currency]);
+    $currencyStmt->execute([
+        $currencyId
+    ]);
 
-    if ($check->fetch()) {
+    $currency = $currencyStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$currency) {
         throw new RuntimeException(
-            "{$currency} opening balance already exists."
+            'Currency does not exist or is inactive.'
+        );
+    }
+
+    /*
+     * Prevent multiple opening balances for the same currency.
+     */
+    $existingStmt = $pdo->prepare("
+        SELECT id
+        FROM opening_balances
+        WHERE currency_id = ?
+        LIMIT 1
+        FOR UPDATE
+    ");
+
+    $existingStmt->execute([
+        $currencyId
+    ]);
+
+    if ($existingStmt->fetch()) {
+        throw new RuntimeException(
+            "An opening balance already exists for {$currency['code']}."
         );
     }
 
     /*
      * Create opening balance record.
      */
-    $stmt = $pdo->prepare("
+    $openingStmt = $pdo->prepare("
         INSERT INTO opening_balances
         (
-            currency,
+            currency_id,
             amount,
             created_by
         )
-        VALUES (?, ?, ?)
+        VALUES
+        (?, ?, ?)
     ");
 
-    $stmt->execute([
-        $currency,
+    $openingStmt->execute([
+        $currencyId,
         $amount,
         $user['id']
     ]);
 
+    $openingBalanceId = $pdo->lastInsertId();
+
     /*
-     * Opening balance is a ledger movement,
-     * NOT a trade.
+     * Ensure account balance exists.
      */
-    $ledgerStmt = $pdo->prepare("
-        INSERT INTO ledger_entries
+    $balanceStmt = $pdo->prepare("
+        INSERT INTO account_balances
         (
-            transaction_id,
-            entry_type,
-            currency,
-            amount
+            currency_id,
+            balance
         )
-        VALUES (NULL, 'OPENING_BALANCE', ?, ?)
+        VALUES
+        (?, ?)
+        ON DUPLICATE KEY UPDATE
+            balance = balance + VALUES(balance)
     ");
 
-    $ledgerStmt->execute([
-        $currency,
+    $balanceStmt->execute([
+        $currencyId,
         $amount
     ]);
 
     /*
-     * Synchronize balance projection.
+     * Create ledger entry.
      */
-    $update = $pdo->prepare("
-        UPDATE account_balances
-        SET balance = balance + ?
-        WHERE currency = ?
+    $ledgerStmt = $pdo->prepare("
+        INSERT INTO ledger_entries
+        (
+            currency_id,
+            opening_balance_id,
+            entry_type,
+            amount
+        )
+        VALUES
+        (?, ?, 'OPENING_BALANCE', ?)
     ");
 
-    $update->execute([
-        $amount,
-        $currency
+    $ledgerStmt->execute([
+        $currencyId,
+        $openingBalanceId,
+        $amount
     ]);
+
+    /*
+     * If this is a non-USD currency, it becomes
+     * available inventory at opening cost of zero.
+     *
+     * We will refine opening inventory/cost basis
+     * later if required.
+     */
 
     $pdo->commit();
 
     jsonResponse([
         'success' => true,
-        'currency' => $currency,
-        'amount' => $amount
+        'message' => 'Opening balance created successfully.',
+        'opening_balance' => [
+            'id' => $openingBalanceId,
+            'currency_id' => (int) $currencyId,
+            'currency_code' => $currency['code'],
+            'amount' => $amount
+        ]
     ], 201);
 } catch (Throwable $e) {
 
