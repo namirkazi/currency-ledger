@@ -12,6 +12,7 @@
   margin: 0;
   font-size: 30px;
   font-weight: 700;
+  color: #172033;
 }
 
 .header p {
@@ -32,7 +33,7 @@
 .tradeTabs button {
   border: 0;
   background: transparent;
-  padding: 11px 28px;
+  padding: 11px 32px;
   border-radius: 9px;
   font-size: 14px;
   font-weight: 600;
@@ -41,11 +42,11 @@
 }
 
 .tradeTabs button:hover {
-  color: #111;
+  color: #111827;
 }
 
 .tradeTabs .activeTab {
-  background: #111;
+  background: #111827;
   color: #fff;
 }
 
@@ -55,6 +56,22 @@
   border-radius: 18px;
   padding: 28px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+}
+
+.tradeHeading {
+  margin-bottom: 24px;
+}
+
+.tradeHeading h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #172033;
+}
+
+.tradeHeading p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #737373;
 }
 
 .formGrid {
@@ -84,17 +101,14 @@
   border-radius: 10px;
   padding: 0 14px;
   background: #fff;
-  color: #111;
+  color: #111827;
   font-size: 15px;
   outline: none;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
 }
 
 .field input:focus,
 .field select:focus {
-  border-color: #111;
+  border-color: #111827;
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
 
@@ -104,38 +118,40 @@
   cursor: not-allowed;
 }
 
+.ratePreview {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #737373;
+}
+
 .calculation {
   margin-top: 24px;
-  padding: 20px;
+  padding: 8px 20px;
   border-radius: 14px;
   background: #f7f7f7;
   border: 1px solid #ededed;
 }
 
-.calculation div {
+.summaryRow {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
   gap: 20px;
 }
 
-.calculation span {
-  color: #737373;
+.summaryRow + .summaryRow {
+  border-top: 1px solid #e5e5e5;
+}
+
+.summaryRow span {
   font-size: 14px;
+  color: #737373;
 }
 
-.calculation strong {
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.info {
-  margin-top: 16px;
-  padding: 13px 15px;
-  border-radius: 10px;
-  background: #f6f6f6;
-  color: #666;
-  font-size: 13px;
+.summaryRow strong {
+  font-size: 22px;
+  color: #172033;
 }
 
 .error,
@@ -160,26 +176,19 @@
 
 .submit {
   width: 100%;
-  height: 50px;
+  height: 52px;
   margin-top: 20px;
   border: 0;
   border-radius: 11px;
-  background: #111;
+  background: #111827;
   color: #fff;
   font-size: 15px;
   font-weight: 650;
   cursor: pointer;
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
 }
 
 .submit:hover:not(:disabled) {
   opacity: 0.9;
-}
-
-.submit:active:not(:disabled) {
-  transform: translateY(1px);
 }
 
 .submit:disabled {
@@ -208,16 +217,11 @@
 
   .tradeTabs button {
     flex: 1;
-    padding: 11px 15px;
   }
 
-  .calculation div {
-    align-items: flex-start;
+  .summaryRow {
     flex-direction: column;
+    align-items: flex-start;
     gap: 5px;
-  }
-
-  .calculation strong {
-    font-size: 21px;
   }
 }

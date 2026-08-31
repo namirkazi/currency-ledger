@@ -2,9 +2,9 @@
 
 require_once __DIR__ . '/config/database.php';
 
-$name = 'Administrator';
-$username = 'admin';
-$password = 'admin123';
+$name = 'administrator';
+$username = 'administrator';
+$password = 'admin@123';
 $role = 'ADMIN';
 
 $check = $pdo->prepare("

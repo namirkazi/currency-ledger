@@ -97,38 +97,28 @@ export const api = {
       }),
     }),
 
-  // ─────────────────────────────────────────────
-  // BUY
-  // ─────────────────────────────────────────────
-
-  buy: (currencyId, currencyAmount, rate, requestId) =>
-    request("buy.php", {
+  // EXCHANGE
+  exchange: (
+    type,
+    fromCurrencyId,
+    fromAmount,
+    toCurrencyId,
+    toAmount,
+    exchangeRate,
+    requestId,
+  ) =>
+    request("exchange.php", {
       method: "POST",
       headers: {
         "X-Idempotency-Key": requestId,
       },
       body: JSON.stringify({
-        currency_id: currencyId,
-        currency_amount: currencyAmount,
-        rate,
-        request_id: requestId,
-      }),
-    }),
-
-  // ─────────────────────────────────────────────
-  // SELL
-  // ─────────────────────────────────────────────
-
-  sell: (currencyId, currencyAmount, rate, requestId) =>
-    request("sell.php", {
-      method: "POST",
-      headers: {
-        "X-Idempotency-Key": requestId,
-      },
-      body: JSON.stringify({
-        currency_id: currencyId,
-        currency_amount: currencyAmount,
-        rate,
+        type,
+        from_currency_id: fromCurrencyId,
+        from_amount: fromAmount,
+        to_currency_id: toCurrencyId,
+        to_amount: toAmount,
+        exchange_rate: exchangeRate,
         request_id: requestId,
       }),
     }),

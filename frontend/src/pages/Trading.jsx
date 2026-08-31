@@ -11,14 +11,10 @@ function createRequestId() {
 }
 
 function formatNumber(value) {
-  if (value === "" || value === null || value === undefined) {
-    return "0.000000";
-  }
-
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
-    return "0.000000";
+    return "0.00";
   }
 
   return number.toLocaleString(undefined, {
@@ -29,10 +25,12 @@ function formatNumber(value) {
 
 export default function Trading() {
   const [currencies, setCurrencies] = useState([]);
+  const [selectedCurrencyId, setSelectedCurrencyId] = useState("");
 
-  const [currencyId, setCurrencyId] = useState("");
   const [amount, setAmount] = useState("");
-  const [rate, setRate] = useState("");
+  const [exchangeRate, setExchangeRate] = useState("");
+
+  const [activeType, setActiveType] = useState("BUY");
 
   const [loadingCurrencies, setLoadingCurrencies] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -40,29 +38,40 @@ export default function Trading() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const [activeType, setActiveType] = useState("BUY");
+  const aedCurrency = useMemo(
+    () => currencies.find((currency) => currency.code?.toUpperCase() === "AED"),
+    [currencies],
+  );
+
+  const tradeCurrencies = useMemo(
+    () =>
+      currencies.filter((currency) => currency.code?.toUpperCase() !== "AED"),
+    [currencies],
+  );
 
   const selectedCurrency = useMemo(
     () =>
-      currencies.find((currency) => Number(currency.id) === Number(currencyId)),
-    [currencies, currencyId],
+      currencies.find(
+        (currency) => Number(currency.id) === Number(selectedCurrencyId),
+      ),
+    [currencies, selectedCurrencyId],
   );
 
-  const usdAmount = useMemo(() => {
-    const numericAmount = Number(amount);
-    const numericRate = Number(rate);
+  const aedAmount = useMemo(() => {
+    const tradeAmount = Number(amount);
+    const rate = Number(exchangeRate);
 
     if (
-      !Number.isFinite(numericAmount) ||
-      !Number.isFinite(numericRate) ||
-      numericAmount <= 0 ||
-      numericRate <= 0
+      !Number.isFinite(tradeAmount) ||
+      !Number.isFinite(rate) ||
+      tradeAmount <= 0 ||
+      rate <= 0
     ) {
-      return "";
+      return 0;
     }
 
-    return numericAmount * numericRate;
-  }, [amount, rate]);
+    return tradeAmount * rate;
+  }, [amount, exchangeRate]);
 
   useEffect(() => {
     loadCurrencies();
@@ -77,18 +86,14 @@ export default function Trading() {
 
       const list = response.currencies || response.data?.currencies || [];
 
-      const tradable = list.filter(
-        (currency) =>
-          Number(currency.id) !==
-          Number(
-            list.find((item) => String(item.code).toUpperCase() === "USD")?.id,
-          ),
+      setCurrencies(list);
+
+      const firstTradeCurrency = list.find(
+        (currency) => currency.code?.toUpperCase() !== "AED",
       );
 
-      setCurrencies(tradable);
-
-      if (tradable.length > 0) {
-        setCurrencyId(String(tradable[0].id));
+      if (firstTradeCurrency) {
+        setSelectedCurrencyId(String(firstTradeCurrency.id));
       }
     } catch (err) {
       setError(err.message);
@@ -99,7 +104,13 @@ export default function Trading() {
 
   function resetForm() {
     setAmount("");
-    setRate("");
+    setExchangeRate("");
+  }
+
+  function changeType(type) {
+    setActiveType(type);
+    setError("");
+    setMessage("");
   }
 
   async function handleSubmit(event) {
@@ -108,7 +119,12 @@ export default function Trading() {
     setError("");
     setMessage("");
 
-    if (!currencyId) {
+    if (!aedCurrency) {
+      setError("AED base currency could not be found.");
+      return;
+    }
+
+    if (!selectedCurrency) {
       setError("Please select a currency.");
       return;
     }
@@ -118,9 +134,35 @@ export default function Trading() {
       return;
     }
 
-    if (!rate || Number(rate) <= 0) {
-      setError("Enter a valid rate.");
+    if (!exchangeRate || Number(exchangeRate) <= 0) {
+      setError("Enter a valid exchange rate.");
       return;
+    }
+
+    if (!aedAmount || aedAmount <= 0) {
+      setError("Calculated AED amount is invalid.");
+      return;
+    }
+
+    let fromCurrencyId;
+    let toCurrencyId;
+    let fromAmount;
+    let toAmount;
+
+    if (activeType === "BUY") {
+      // BUY foreign currency using AED
+      fromCurrencyId = Number(aedCurrency.id);
+      fromAmount = Number(aedAmount.toFixed(6));
+
+      toCurrencyId = Number(selectedCurrency.id);
+      toAmount = Number(Number(amount).toFixed(6));
+    } else {
+      // SELL foreign currency and receive AED
+      fromCurrencyId = Number(selectedCurrency.id);
+      fromAmount = Number(Number(amount).toFixed(6));
+
+      toCurrencyId = Number(aedCurrency.id);
+      toAmount = Number(aedAmount.toFixed(6));
     }
 
     const requestId = createRequestId();
@@ -128,24 +170,23 @@ export default function Trading() {
     try {
       setLoading(true);
 
-      const result =
-        activeType === "BUY"
-          ? await api.buy(Number(currencyId), amount, rate, requestId)
-          : await api.sell(Number(currencyId), amount, rate, requestId);
+      await api.exchange(
+        activeType,
+        fromCurrencyId,
+        fromAmount,
+        toCurrencyId,
+        toAmount,
+        Number(exchangeRate),
+        requestId,
+      );
 
       if (activeType === "BUY") {
         setMessage(
-          `Bought ${formatNumber(amount)} ${
-            selectedCurrency?.code || ""
-          } for ${formatNumber(result.usd_amount)} USD.`,
+          `Successfully bought ${formatNumber(amount)} ${selectedCurrency.code} for ${formatNumber(aedAmount)} AED.`,
         );
       } else {
         setMessage(
-          `Sold ${formatNumber(amount)} ${
-            selectedCurrency?.code || ""
-          } for ${formatNumber(result.usd_amount)} USD. Profit: ${formatNumber(
-            result.profit,
-          )} USD.`,
+          `Successfully sold ${formatNumber(amount)} ${selectedCurrency.code} for ${formatNumber(aedAmount)} AED.`,
         );
       }
 
@@ -157,24 +198,23 @@ export default function Trading() {
     }
   }
 
+  const actionLabel = activeType === "BUY" ? "Buying" : "Selling";
+
+  const submitLabel = activeType === "BUY" ? "Complete Buy" : "Complete Sell";
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <div>
-          <h1>Trading</h1>
-          <p>Buy and sell currencies against USD.</p>
-        </div>
+        <h1>Trading</h1>
+
+        <p>Buy and sell currencies against AED.</p>
       </div>
 
       <div className={styles.tradeTabs}>
         <button
           type="button"
           className={activeType === "BUY" ? styles.activeTab : ""}
-          onClick={() => {
-            setActiveType("BUY");
-            setError("");
-            setMessage("");
-          }}
+          onClick={() => changeType("BUY")}
         >
           Buy
         </button>
@@ -182,35 +222,33 @@ export default function Trading() {
         <button
           type="button"
           className={activeType === "SELL" ? styles.activeTab : ""}
-          onClick={() => {
-            setActiveType("SELL");
-            setError("");
-            setMessage("");
-          }}
+          onClick={() => changeType("SELL")}
         >
           Sell
         </button>
       </div>
 
       <form className={styles.tradeCard} onSubmit={handleSubmit}>
+        <div className={styles.tradeHeading}>
+          <h2>{actionLabel} Currency</h2>
+
+          <p>
+            {activeType === "BUY"
+              ? "Select the currency you want to buy."
+              : "Select the currency you want to sell."}
+          </p>
+        </div>
+
         <div className={styles.formGrid}>
           <div className={styles.field}>
             <label>Currency</label>
 
             <select
-              value={currencyId}
-              onChange={(event) => setCurrencyId(event.target.value)}
-              disabled={loadingCurrencies || loading}
+              value={selectedCurrencyId}
+              onChange={(event) => setSelectedCurrencyId(event.target.value)}
+              disabled={loading || loadingCurrencies}
             >
-              {loadingCurrencies && (
-                <option value="">Loading currencies...</option>
-              )}
-
-              {!loadingCurrencies && currencies.length === 0 && (
-                <option value="">No currencies available</option>
-              )}
-
-              {currencies.map((currency) => (
+              {tradeCurrencies.map((currency) => (
                 <option key={currency.id} value={currency.id}>
                   {currency.code}
                   {currency.name ? ` — ${currency.name}` : ""}
@@ -220,48 +258,76 @@ export default function Trading() {
           </div>
 
           <div className={styles.field}>
-            <label>{selectedCurrency?.code || "Currency"} Amount</label>
+            <label>Amount {selectedCurrency?.code || ""}</label>
 
             <input
-              type="text"
-              inputMode="decimal"
+              type="number"
+              step="0.000001"
+              min="0"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
-              placeholder="0.000000"
+              placeholder="0.00"
               disabled={loading}
               required
             />
           </div>
 
           <div className={styles.field}>
-            <label>USD Rate per {selectedCurrency?.code || "currency"}</label>
+            <label>Rate (AED per {selectedCurrency?.code || "currency"})</label>
 
             <input
-              type="text"
-              inputMode="decimal"
-              value={rate}
-              onChange={(event) => setRate(event.target.value)}
-              placeholder="0.000000"
+              type="number"
+              step="0.000001"
+              min="0"
+              value={exchangeRate}
+              onChange={(event) => setExchangeRate(event.target.value)}
+              placeholder={`1 ${selectedCurrency?.code || ""} = ? AED`}
               disabled={loading}
               required
             />
           </div>
         </div>
 
-        <div className={styles.calculation}>
-          <div>
-            <span>{activeType === "BUY" ? "You pay" : "You receive"}</span>
-
-            <strong>{formatNumber(usdAmount)} USD</strong>
-          </div>
+        <div className={styles.ratePreview}>
+          1 {selectedCurrency?.code || "Currency"} ={" "}
+          {formatNumber(exchangeRate)} AED
         </div>
 
-        {activeType === "SELL" && (
-          <div className={styles.info}>
-            Profit is calculated by the server from the actual inventory
-            acquisition cost.
-          </div>
-        )}
+        <div className={styles.calculation}>
+          {activeType === "BUY" ? (
+            <>
+              <div className={styles.summaryRow}>
+                <span>You Pay</span>
+
+                <strong>{formatNumber(aedAmount)} AED</strong>
+              </div>
+
+              <div className={styles.summaryRow}>
+                <span>You Receive</span>
+
+                <strong>
+                  {formatNumber(amount)} {selectedCurrency?.code || ""}
+                </strong>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.summaryRow}>
+                <span>You Sell</span>
+
+                <strong>
+                  {formatNumber(amount)} {selectedCurrency?.code || ""}
+                </strong>
+              </div>
+
+              <div className={styles.summaryRow}>
+                <span>You Receive</span>
+
+                <strong>{formatNumber(aedAmount)} AED</strong>
+              </div>
+            </>
+          )}
+        </div>
 
         {error && <div className={styles.error}>{error}</div>}
 
@@ -270,13 +336,11 @@ export default function Trading() {
         <button
           type="submit"
           className={styles.submit}
-          disabled={loading || loadingCurrencies || !currencyId}
+          disabled={
+            loading || loadingCurrencies || !selectedCurrencyId || !aedCurrency
+          }
         >
-          {loading
-            ? "Processing..."
-            : activeType === "BUY"
-              ? `Buy ${selectedCurrency?.code || ""}`
-              : `Sell ${selectedCurrency?.code || ""}`}
+          {loading ? "Processing..." : submitLabel}
         </button>
       </form>
     </div>

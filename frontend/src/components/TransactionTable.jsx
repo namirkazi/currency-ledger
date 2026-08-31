@@ -5,13 +5,17 @@ function formatNumber(value) {
   });
 }
 
+function formatCurrency(amount, code) {
+  return `${formatNumber(amount)} ${code || ""}`;
+}
+
 export default function TransactionTable({ transactions = [] }) {
   return (
     <div className="table-card">
       <div className="table-header">
         <div>
-          <h3>Recent Transactions</h3>
-          <p>Latest trading activity</p>
+          <h3>Recent Exchanges</h3>
+          <p>Latest currency exchange activity</p>
         </div>
       </div>
 
@@ -20,10 +24,9 @@ export default function TransactionTable({ transactions = [] }) {
           <thead>
             <tr>
               <th>Type</th>
-              <th>USD</th>
+              <th>From</th>
+              <th>To</th>
               <th>Rate</th>
-              <th>AED</th>
-              <th>Profit</th>
               <th>User</th>
               <th>Date</th>
             </tr>
@@ -32,28 +35,24 @@ export default function TransactionTable({ transactions = [] }) {
           <tbody>
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan="7" className="empty">
-                  No transactions yet.
+                <td colSpan="6" className="empty">
+                  No exchanges yet.
                 </td>
               </tr>
             ) : (
               transactions.map((tx) => (
                 <tr key={tx.id}>
                   <td>
-                    <span
-                      className={`trade-badge ${
-                        tx.type === "BUY_USDT" ? "buy" : "sell"
-                      }`}
-                    >
-                      {tx.type === "BUY_USDT" ? "BUY" : "SELL"}
-                    </span>
+                    <span className="trade-badge buy">EXCHANGE</span>
                   </td>
 
-                  <td>{formatNumber(tx.usdt_amount)}</td>
-                  <td>{formatNumber(tx.rate)}</td>
-                  <td>{formatNumber(tx.aed_amount)}</td>
+                  <td>
+                    {formatCurrency(tx.from_amount, tx.from_currency_code)}
+                  </td>
 
-                  <td className="profit">{formatNumber(tx.realized_profit)}</td>
+                  <td>{formatCurrency(tx.to_amount, tx.to_currency_code)}</td>
+
+                  <td>{formatNumber(tx.exchange_rate)}</td>
 
                   <td>{tx.user_name}</td>
 

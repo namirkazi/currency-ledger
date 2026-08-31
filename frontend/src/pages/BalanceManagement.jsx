@@ -1,17 +1,48 @@
 import { useEffect, useState } from "react";
-import { createBalanceMovement, getBalanceMovements } from "../services/api";
+
+import {
+  createBalanceMovement,
+  getBalanceMovements,
+  api,
+} from "../services/api";
 
 import styles from "./BalanceManagement.module.css";
 
 export default function BalanceManagement() {
-  const [currency, setCurrency] = useState("AED");
+  const [currencies, setCurrencies] = useState([]);
+  const [currencyId, setCurrencyId] = useState("");
+
   const [type, setType] = useState("INFLOW");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
 
   const [movements, setMovements] = useState([]);
+
   const [loading, setLoading] = useState(false);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
+
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function loadCurrencies() {
+    try {
+      setLoadingCurrencies(true);
+
+      const response = await api.currencies();
+
+      const list = response.currencies || response.data?.currencies || [];
+
+      setCurrencies(list);
+
+      if (list.length > 0) {
+        setCurrencyId(String(list[0].id));
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingCurrencies(false);
+    }
+  }
 
   async function loadMovements() {
     try {
@@ -19,38 +50,49 @@ export default function BalanceManagement() {
 
       setMovements(data.movements || []);
     } catch (error) {
-      setMessage(error.message);
+      setError(error.message);
     }
   }
 
   useEffect(() => {
+    loadCurrencies();
     loadMovements();
   }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!amount || Number(amount) <= 0) {
-      setMessage("Enter a valid amount.");
+    setMessage("");
+    setError("");
+
+    if (!currencyId) {
+      setError("Please select a currency.");
       return;
     }
+
+    if (!amount || Number(amount) <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+
     setLoading(true);
-    setMessage("");
 
     try {
       await createBalanceMovement({
-        currency_id: currencyId,
+        currency_id: Number(currencyId),
         movement_type: type,
         amount,
+        reason,
       });
 
       setAmount("");
+      setReason("");
 
       setMessage("Balance movement recorded.");
 
       await loadMovements();
     } catch (error) {
-      setMessage(error.message);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -61,7 +103,7 @@ export default function BalanceManagement() {
       <div className={styles.header}>
         <h1>Balance Management</h1>
 
-        <p>Record AED or USD entering or leaving the trading operation.</p>
+        <p>Record money entering or leaving any currency balance.</p>
       </div>
 
       <div className={styles.grid}>
@@ -73,12 +115,16 @@ export default function BalanceManagement() {
 
             <select
               id="currency"
-              value={currency}
-              onChange={(event) => setCurrency(event.target.value)}
+              value={currencyId}
+              onChange={(event) => setCurrencyId(event.target.value)}
+              disabled={loadingCurrencies || loading}
             >
-              <option value="AED">AED</option>
-
-              <option value="USD">USD</option>
+              {currencies.map((currency) => (
+                <option key={currency.id} value={currency.id}>
+                  {currency.code}
+                  {currency.name ? ` — ${currency.name}` : ""}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -89,6 +135,7 @@ export default function BalanceManagement() {
               id="type"
               value={type}
               onChange={(event) => setType(event.target.value)}
+              disabled={loading}
             >
               <option value="INFLOW">Money In</option>
 
@@ -101,11 +148,13 @@ export default function BalanceManagement() {
 
             <input
               id="amount"
-              type="text"
-              inputMode="decimal"
+              type="number"
+              step="0.000001"
+              min="0"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               placeholder="0.00"
+              disabled={loading}
             />
           </div>
 
@@ -118,12 +167,19 @@ export default function BalanceManagement() {
               onChange={(event) => setReason(event.target.value)}
               placeholder="Reason for this movement"
               maxLength={255}
+              disabled={loading}
             />
           </div>
 
+          {error && <div className={styles.error}>{error}</div>}
+
           {message && <div className={styles.message}>{message}</div>}
 
-          <button className={styles.button} type="submit" disabled={loading}>
+          <button
+            className={styles.button}
+            type="submit"
+            disabled={loading || loadingCurrencies || !currencyId}
+          >
             {loading ? "Saving..." : "Record Movement"}
           </button>
         </form>
@@ -138,15 +194,25 @@ export default function BalanceManagement() {
               {movements.map((movement) => (
                 <div className={styles.row} key={movement.id}>
                   <div className={styles.rowLeft}>
-                    <span className={styles.currency}>{movement.currency}</span>
+                    <span className={styles.currency}>
+                      {movement.currency_code}
+                    </span>
 
-                    <span className={styles.reason}>{movement.reason}</span>
+                    <span className={styles.reason}>
+                      {movement.currency_name}
+                    </span>
 
                     <span className={styles.user}>{movement.user_name}</span>
                   </div>
 
                   <div className={styles.rowRight}>
-                    <span className={styles.amount}>
+                    <span
+                      className={`${styles.amount} ${
+                        movement.movement_type === "INFLOW"
+                          ? styles.inflow
+                          : styles.outflow
+                      }`}
+                    >
                       {movement.movement_type === "INFLOW" ? "+" : "-"}
                       {movement.amount}
                     </span>

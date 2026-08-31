@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
-import {
-  Banknote,
-  Coins,
-  TrendingUp,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-} from "lucide-react";
+import { Banknote, ArrowRightLeft, CalendarDays } from "lucide-react";
+
 import StatCard from "../components/StatCard";
 import TransactionTable from "../components/TransactionTable";
 import { api } from "../services/api";
@@ -16,6 +11,7 @@ export default function Dashboard() {
 
   async function load() {
     try {
+      setError("");
       setData(await api.dashboard());
     } catch (err) {
       setError(err.message);
@@ -39,57 +35,51 @@ export default function Dashboard() {
       <div className="page-heading">
         <div>
           <h2>Dashboard</h2>
-          <p>Current position and trading activity.</p>
+          <p>Current currency positions and exchange activity.</p>
         </div>
       </div>
 
+      {/* CURRENCY BALANCES */}
+
+      <div className="stats-grid">
+        {(data.balances || []).map((balance) => (
+          <StatCard
+            key={balance.currency_id}
+            label={`${balance.code} Balance`}
+            value={Number(balance.balance).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 6,
+            })}
+            currency={balance.code}
+            icon={Banknote}
+          />
+        ))}
+      </div>
+
+      {/* ACTIVITY */}
+
       <div className="stats-grid">
         <StatCard
-          label="AED Balance"
-          value={Number(data.balances.AED).toLocaleString()}
-          currency="AED"
-          icon={Banknote}
+          label="Today's Exchanges"
+          value={Number(data.today?.total_transactions || 0).toLocaleString()}
+          icon={ArrowRightLeft}
         />
 
         <StatCard
-          label="USD Balance"
-          value={Number(data.balances.USDT).toLocaleString()}
-          currency="USDT"
-          icon={Coins}
-        />
-
-        <StatCard
-          label="Today's Profit"
-          value={Number(data.today.profit).toLocaleString()}
-          currency="AED"
-          icon={TrendingUp}
-          positive
-        />
-
-        <StatCard
-          label="Monthly Profit"
-          value={Number(data.month_profit).toLocaleString()}
-          currency="AED"
-          icon={TrendingUp}
-          positive
-        />
-
-        <StatCard
-          label="USD Bought Today"
-          value={Number(data.today.buy_usdt).toLocaleString()}
-          currency="USDT"
-          icon={ArrowDownToLine}
-        />
-
-        <StatCard
-          label="USD Sold Today"
-          value={Number(data.today.sell_usdt).toLocaleString()}
-          currency="USDT"
-          icon={ArrowUpFromLine}
+          label="This Month's Exchanges"
+          value={Number(data.month?.total_transactions || 0).toLocaleString()}
+          icon={CalendarDays}
         />
       </div>
 
-      <TransactionTable transactions={data.recent} />
+      <div className="page-heading" style={{ marginTop: 32 }}>
+        <div>
+          <h2>Recent Exchanges</h2>
+          <p>Latest currency movements in the ledger.</p>
+        </div>
+      </div>
+
+      <TransactionTable transactions={data.recent || []} />
     </>
   );
 }

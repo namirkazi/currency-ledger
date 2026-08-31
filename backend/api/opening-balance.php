@@ -13,6 +13,13 @@ $data = json_decode(
     true
 );
 
+if (!is_array($data)) {
+    jsonResponse([
+        'success' => false,
+        'message' => 'Invalid JSON request.'
+    ], 400);
+}
+
 $currencyId = filter_var(
     $data['currency_id'] ?? null,
     FILTER_VALIDATE_INT
@@ -37,11 +44,10 @@ if (bccomp($amount, '0', 6) <= 0) {
 }
 
 try {
-
     $pdo->beginTransaction();
 
     /*
-     * Make sure the currency exists and is active.
+     * Get currency.
      */
     $currencyStmt = $pdo->prepare("
         SELECT
@@ -53,6 +59,7 @@ try {
         WHERE id = ?
           AND active = 1
         LIMIT 1
+        FOR UPDATE
     ");
 
     $currencyStmt->execute([
@@ -68,7 +75,7 @@ try {
     }
 
     /*
-     * Prevent multiple opening balances for the same currency.
+     * One opening balance per currency.
      */
     $existingStmt = $pdo->prepare("
         SELECT id
@@ -89,7 +96,7 @@ try {
     }
 
     /*
-     * Create opening balance record.
+     * Create opening balance.
      */
     $openingStmt = $pdo->prepare("
         INSERT INTO opening_balances
@@ -111,7 +118,7 @@ try {
     $openingBalanceId = $pdo->lastInsertId();
 
     /*
-     * Ensure account balance exists.
+     * Update current account balance.
      */
     $balanceStmt = $pdo->prepare("
         INSERT INTO account_balances
@@ -131,43 +138,41 @@ try {
     ]);
 
     /*
-     * Create ledger entry.
+     * Record immutable ledger entry.
+     *
+     * The database uses OPENING as the entry type.
      */
     $ledgerStmt = $pdo->prepare("
         INSERT INTO ledger_entries
         (
             currency_id,
-            opening_balance_id,
+            amount,
             entry_type,
-            amount
+            opening_balance_id
         )
         VALUES
-        (?, ?, 'OPENING_BALANCE', ?)
+        (?, ?, 'OPENING', ?)
     ");
 
     $ledgerStmt->execute([
         $currencyId,
-        $openingBalanceId,
-        $amount
+        $amount,
+        $openingBalanceId
     ]);
 
     /*
-     * If this is a non-USD currency, it becomes
-     * available inventory at opening cost of zero.
-     *
-     * We will refine opening inventory/cost basis
-     * later if required.
+     * Commit.
      */
-
     $pdo->commit();
 
     jsonResponse([
         'success' => true,
         'message' => 'Opening balance created successfully.',
         'opening_balance' => [
-            'id' => $openingBalanceId,
+            'id' => (int) $openingBalanceId,
             'currency_id' => (int) $currencyId,
             'currency_code' => $currency['code'],
+            'currency_name' => $currency['name'],
             'amount' => $amount
         ]
     ], 201);

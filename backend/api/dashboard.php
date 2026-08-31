@@ -9,9 +9,9 @@ requireAuth();
 
 try {
 
-    // ---------------------------------------------------------
-    // CURRENT BALANCES
-    // ---------------------------------------------------------
+    /*
+     * CURRENT BALANCES
+     */
 
     $balanceStmt = $pdo->query("
         SELECT
@@ -20,86 +20,77 @@ try {
             c.name,
             c.symbol,
             ab.balance
+
         FROM account_balances ab
+
         INNER JOIN currencies c
             ON c.id = ab.currency_id
+
         WHERE c.active = 1
+
         ORDER BY c.code ASC
     ");
 
     $balances = $balanceStmt->fetchAll(PDO::FETCH_ASSOC);
 
 
-    // ---------------------------------------------------------
-    // TODAY'S BUY TOTALS
-    // ---------------------------------------------------------
+    /*
+     * TODAY'S EXCHANGE COUNT
+     */
 
-    $buyStmt = $pdo->query("
+    $todayStmt = $pdo->query("
         SELECT
-            COALESCE(SUM(currency_amount), 0) AS currency_amount,
-            COALESCE(SUM(usd_amount), 0) AS usd_amount
+            COUNT(*) AS total_transactions
+
         FROM transactions
-        WHERE type = 'BUY'
-          AND status = 'COMPLETED'
+
+        WHERE status = 'COMPLETED'
           AND DATE(created_at) = CURDATE()
     ");
 
-    $todayBuy = $buyStmt->fetch(PDO::FETCH_ASSOC);
+    $today = $todayStmt->fetch(PDO::FETCH_ASSOC);
 
 
-    // ---------------------------------------------------------
-    // TODAY'S SELL TOTALS
-    // ---------------------------------------------------------
-
-    $sellStmt = $pdo->query("
-        SELECT
-            COALESCE(SUM(currency_amount), 0) AS currency_amount,
-            COALESCE(SUM(usd_amount), 0) AS usd_amount,
-            COALESCE(SUM(realized_profit), 0) AS realized_profit
-        FROM transactions
-        WHERE type = 'SELL'
-          AND status = 'COMPLETED'
-          AND DATE(created_at) = CURDATE()
-    ");
-
-    $todaySell = $sellStmt->fetch(PDO::FETCH_ASSOC);
-
-
-    // ---------------------------------------------------------
-    // MONTHLY PROFIT
-    // PROFIT IS ALWAYS USD
-    // ---------------------------------------------------------
+    /*
+     * THIS MONTH'S EXCHANGE COUNT
+     */
 
     $monthStmt = $pdo->query("
         SELECT
-            COALESCE(SUM(realized_profit), 0)
+            COUNT(*) AS total_transactions
+
         FROM transactions
-        WHERE type = 'SELL'
-          AND status = 'COMPLETED'
+
+        WHERE status = 'COMPLETED'
           AND YEAR(created_at) = YEAR(CURDATE())
           AND MONTH(created_at) = MONTH(CURDATE())
     ");
 
-    $monthProfit = $monthStmt->fetchColumn();
+    $month = $monthStmt->fetch(PDO::FETCH_ASSOC);
 
 
-    // ---------------------------------------------------------
-    // RECENT TRANSACTIONS
-    // ---------------------------------------------------------
+    /*
+     * RECENT TRANSACTIONS
+     */
 
     $recentStmt = $pdo->query("
         SELECT
             t.id,
+            t.request_id,
             t.type,
 
-            t.currency_id,
-            c.code AS currency_code,
-            c.name AS currency_name,
-            c.symbol AS currency_symbol,
+            fc.code AS from_currency_code,
+            fc.name AS from_currency_name,
+            fc.symbol AS from_currency_symbol,
 
-            t.currency_amount,
-            t.rate,
-            t.usd_amount,
+            t.from_amount,
+
+            tc.code AS to_currency_code,
+            tc.name AS to_currency_name,
+            tc.symbol AS to_currency_symbol,
+
+            t.to_amount,
+            t.exchange_rate,
             t.realized_profit,
 
             t.status,
@@ -109,8 +100,11 @@ try {
 
         FROM transactions t
 
-        INNER JOIN currencies c
-            ON c.id = t.currency_id
+        INNER JOIN currencies fc
+            ON fc.id = t.from_currency_id
+
+        INNER JOIN currencies tc
+            ON tc.id = t.to_currency_id
 
         INNER JOIN users u
             ON u.id = t.created_by
@@ -131,16 +125,14 @@ try {
         'balances' => $balances,
 
         'today' => [
-            'buy_currency_amount' => $todayBuy['currency_amount'],
-            'buy_usd' => $todayBuy['usd_amount'],
-
-            'sell_currency_amount' => $todaySell['currency_amount'],
-            'sell_usd' => $todaySell['usd_amount'],
-
-            'profit_usd' => $todaySell['realized_profit']
+            'total_transactions' =>
+            (int) $today['total_transactions']
         ],
 
-        'month_profit_usd' => $monthProfit,
+        'month' => [
+            'total_transactions' =>
+            (int) $month['total_transactions']
+        ],
 
         'recent' => $recent
     ]);

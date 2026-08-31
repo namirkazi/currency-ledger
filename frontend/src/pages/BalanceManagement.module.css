@@ -169,3 +169,20 @@
     align-items: flex-start;
   }
 }
+.inflow {
+  color: #18794e;
+}
+
+.outflow {
+  color: #b42318;
+}
+
+.error {
+  margin-bottom: 15px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: #fff1f1;
+  color: #b42318;
+  border: 1px solid #ffd4d4;
+  font-size: 13px;
+}
