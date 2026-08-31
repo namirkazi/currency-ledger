@@ -1,12 +1,8 @@
 <?php
-
 require_once __DIR__ . '/../../config/cors.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../helpers/response.php';
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../helpers/auth.php';
 
 $data = json_decode(file_get_contents('php://input'), true);
 
