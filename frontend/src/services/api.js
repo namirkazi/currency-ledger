@@ -1,19 +1,19 @@
 const API_BASE = import.meta.env.VITE_API_URL;
 
-async function request(path, options = {}) {
-  const response = await fetch(`${API}/${path}`, {
+async function request(endpoint, options = {}) {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...options.headers,
     },
-    ...options,
   });
 
   const data = await response.json();
 
-  if (!response.ok || data.success === false) {
-    throw new Error(data.message || "Request failed.");
+  if (!response.ok) {
+    throw new Error(data.message || "Request failed");
   }
 
   return data;
