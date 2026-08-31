@@ -1,12 +1,14 @@
 <?php
 
-$allowedOrigin = 'http://localhost:5173';
+$allowedOrigins = [
+    'http://localhost:5173',
+    'https://marvelous-perfection-production.up.railway.app',
+];
 
-if (
-    isset($_SERVER['HTTP_ORIGIN']) &&
-    $_SERVER['HTTP_ORIGIN'] === $allowedOrigin
-) {
-    header("Access-Control-Allow-Origin: {$allowedOrigin}");
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+if (in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: $origin");
     header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-Idempotency-Key');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
