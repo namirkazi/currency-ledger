@@ -1,4 +1,4 @@
-const API = "http://localhost/currency-ledger/backend/api";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}/${path}`, {
