@@ -3,6 +3,7 @@
 $allowedOrigins = [
     'http://localhost:5173',
     'https://marvelous-perfection-production.up.railway.app',
+    'https://ledger.vmsambitiousgroup.com',
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
