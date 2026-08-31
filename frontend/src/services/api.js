@@ -1,7 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_URL;
+const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
 
 async function request(endpoint, options = {}) {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetch(`${API_BASE}/api/${endpoint}`, {
     ...options,
     credentials: "include",
     headers: {
@@ -18,7 +18,6 @@ async function request(endpoint, options = {}) {
 
   return data;
 }
-
 export const api = {
   // ─────────────────────────────────────────────
   // AUTH
