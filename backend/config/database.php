@@ -1,10 +1,10 @@
 <?php
 
-$host = getenv('DB_HOST') ?: '127.0.0.1';
-$port = getenv('DB_PORT') ?: '3306';
-$db   = getenv('DB_NAME') ?: 'currency_ledger';
-$user = getenv('DB_USER') ?: 'root';
-$pass = getenv('DB_PASS') ?: '';
+$host = getenv('MYSQLHOST') ?: '127.0.0.1';
+$port = getenv('MYSQLPORT') ?: '3306';
+$db   = getenv('MYSQL_DATABASE') ?: 'currency_ledger';
+$user = getenv('MYSQLUSER') ?: 'root';
+$pass = getenv('MYSQL_ROOT_PASSWORD') ?: '';
 
 $dsn = "mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4";
 
