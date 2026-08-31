@@ -6,9 +6,10 @@ function startSecureSession(): void
         session_set_cookie_params([
             'lifetime' => 0,
             'path' => '/',
+            'domain' => '.vmsambitiousgroup.com',
             'secure' => true,
             'httponly' => true,
-            'samesite' => 'None',
+            'samesite' => 'Lax',
         ]);
 
         session_start();
