@@ -1,3 +1,5 @@
 #!/bin/sh
 
-php -S 0.0.0.0:${PORT:-8080}
+cd "$(dirname "$0")"
+
+php -S 0.0.0.0:$PORT
