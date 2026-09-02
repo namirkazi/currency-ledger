@@ -274,9 +274,8 @@ try {
             $e->getMessage()
     );
 
-
     jsonResponse([
         'success' => false,
-        'message' => 'Unable to load facility details.'
+        'message' => $e->getMessage()
     ], 500);
 }
