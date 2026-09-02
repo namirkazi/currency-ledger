@@ -9,6 +9,8 @@ import {
   Menu,
   X,
   SquareChartGantt,
+  Landmark,
+  Building2,
 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../services/api";
@@ -63,6 +65,18 @@ export default function Layout() {
           <NavLink to="/balance-management" onClick={() => setOpen(false)}>
             <WalletCards size={19} />
             Balance Management
+          </NavLink>
+        </nav>
+        <nav>
+          <NavLink to="/financial-facilities" onClick={() => setOpen(false)}>
+            <Landmark size={19} />
+            Financial Facilities
+          </NavLink>
+        </nav>
+        <nav>
+          <NavLink to="/companies" onClick={() => setOpen(false)}>
+            <Building2 size={19} />
+            Companies
           </NavLink>
         </nav>
         <button className="logout-button" onClick={logout}>

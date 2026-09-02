@@ -1,0 +1,507 @@
+.companies-page {
+  padding: 32px;
+  min-height: 100%;
+}
+
+/* Header */
+
+.companies-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.page-eyebrow,
+.modal-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  opacity: 0.55;
+  margin-bottom: 8px;
+}
+
+.companies-header h1 {
+  margin: 0;
+  font-size: 30px;
+}
+
+.companies-header p {
+  margin: 8px 0 0;
+  opacity: 0.6;
+}
+
+.create-company-btn,
+.primary-btn,
+.empty-create-btn {
+  border: none;
+  padding: 12px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.create-company-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Stats */
+
+.company-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.company-stat-card {
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.stat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.stat-icon {
+  font-size: 18px;
+  opacity: 0.45;
+}
+
+.stat-value {
+  margin-top: 18px;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.stat-subtext {
+  margin-top: 7px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+/* Main Panel */
+
+.companies-panel {
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.company-toolbar {
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.company-filters {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.company-filter {
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  background: transparent;
+  padding: 7px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.company-filter.active {
+  font-weight: 700;
+}
+
+.company-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  padding: 0 10px;
+  border-radius: 8px;
+}
+
+.company-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 9px 4px;
+}
+
+/* Table */
+
+.companies-table-wrapper {
+  overflow-x: auto;
+}
+
+.companies-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.companies-table th {
+  text-align: left;
+  padding: 14px 18px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.55;
+}
+
+.companies-table td {
+  padding: 16px 18px;
+  border-top: 1px solid rgba(128, 128, 128, 0.12);
+  font-size: 13px;
+}
+
+.company-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.company-avatar {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 9px;
+
+  border: 1px solid rgba(128, 128, 128, 0.2);
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.company-code {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 5px 8px;
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  border-radius: 6px;
+}
+
+.muted-value {
+  opacity: 0.4;
+}
+
+/* Status */
+
+.company-status-badge {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 5px 9px;
+
+  border-radius: 20px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.company-status-badge.active {
+  opacity: 1;
+}
+
+.company-status-badge.inactive {
+  opacity: 0.5;
+}
+
+/* Actions */
+
+.company-actions-cell {
+  text-align: right;
+}
+
+.edit-company-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  background: transparent;
+
+  border-radius: 7px;
+
+  padding: 7px 10px;
+
+  cursor: pointer;
+
+  font-size: 12px;
+}
+
+/* Empty / Loading */
+
+.empty-companies,
+.companies-loading,
+.companies-error {
+  padding: 70px 20px;
+  text-align: center;
+}
+
+.empty-company-icon {
+  width: 34px;
+  height: 34px;
+
+  opacity: 0.4;
+
+  margin-bottom: 14px;
+}
+
+.empty-companies h3 {
+  margin: 0;
+}
+
+.empty-companies p {
+  opacity: 0.55;
+  margin: 10px 0 20px;
+}
+
+.retry-btn {
+  display: block;
+  margin: 16px auto 0;
+
+  padding: 9px 14px;
+
+  border-radius: 8px;
+
+  border: 1px solid rgba(128, 128, 128, 0.25);
+
+  background: transparent;
+
+  cursor: pointer;
+}
+
+/* Modal */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+
+  z-index: 1000;
+
+  background: rgba(0, 0, 0, 0.55);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+}
+
+.company-modal {
+  width: min(700px, 100%);
+  max-height: 90vh;
+
+  overflow-y: auto;
+
+  border-radius: 16px;
+
+  background: #f4f6f9;
+
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.modal-header {
+  padding: 24px;
+
+  display: flex;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.modal-header h2 {
+  margin: 0;
+}
+
+.modal-header p {
+  margin: 7px 0 0;
+  opacity: 0.55;
+}
+
+.modal-close {
+  border: none;
+  background: transparent;
+
+  font-size: 26px;
+
+  cursor: pointer;
+}
+
+/* Form */
+
+.company-form {
+  padding: 24px;
+}
+
+.form-section {
+  margin-bottom: 28px;
+}
+
+.form-section h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.two-columns {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.form-group input,
+.form-group select {
+  padding: 11px 12px;
+
+  border-radius: 8px;
+
+  border: 1px solid rgba(128, 128, 128, 0.25);
+
+  background: transparent;
+
+  outline: none;
+}
+
+/* Status selector */
+
+.company-status-selector {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.status-option {
+  text-align: left;
+
+  padding: 15px;
+
+  border-radius: 10px;
+
+  border: 1px solid rgba(128, 128, 128, 0.2);
+
+  background: transparent;
+
+  cursor: pointer;
+}
+
+.status-option.selected {
+  border-width: 2px;
+}
+
+.status-option strong,
+.status-option span {
+  display: block;
+}
+
+.status-option span {
+  margin-top: 6px;
+
+  font-size: 11px;
+
+  opacity: 0.55;
+}
+
+/* Errors */
+
+.form-error {
+  margin-bottom: 20px;
+
+  padding: 12px;
+
+  border-radius: 8px;
+
+  border: 1px solid rgba(220, 80, 80, 0.4);
+}
+
+/* Footer */
+
+.modal-footer {
+  padding: 18px 24px;
+
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  border-top: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.secondary-btn {
+  padding: 10px 16px;
+
+  border-radius: 8px;
+
+  border: 1px solid rgba(128, 128, 128, 0.25);
+
+  background: transparent;
+
+  cursor: pointer;
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .company-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .companies-page {
+    padding: 18px;
+  }
+
+  .companies-header,
+  .company-toolbar {
+    flex-direction: column;
+  }
+
+  .two-columns,
+  .company-status-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .company-search {
+    width: 100%;
+  }
+
+  .company-search input {
+    width: 100%;
+  }
+}

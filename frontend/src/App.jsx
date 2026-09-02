@@ -12,6 +12,8 @@ import Reconciliation from "./pages/Reconciliation";
 import Users from "./pages/Users/Users";
 import OpeningBalance from "./pages/OpeningBalance/OpeningBalance";
 import BalanceManagement from "./pages/BalanceManagement";
+import FinancialFacilities from "./pages/FinancialFacilities/FinancialFacilities";
+import Companies from "./pages/Companies/Companies";
 
 export default function App() {
   return (
@@ -28,13 +30,17 @@ export default function App() {
             <Route path="/transactions" element={<Transactions />} />
 
             <Route path="/opening-balances" element={<OpeningBalance />} />
-
+            <Route
+              path="/financial-facilities"
+              element={<FinancialFacilities />}
+            />
             <Route path="/reports" element={<Reports />} />
             <Route path="/currencies" element={<Currencies />} />
             <Route path="/reconciliation" element={<Reconciliation />} />
             <Route path="/balance-management" element={<BalanceManagement />} />
             <Route element={<ProtectedRoute adminOnly />}>
               <Route path="/users" element={<Users />} />
+              <Route path="/companies" element={<Companies />} />
             </Route>
           </Route>
         </Route>

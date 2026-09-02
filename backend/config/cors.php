@@ -4,6 +4,7 @@ $allowedOrigins = [
     'http://localhost:5173',
     'https://marvelous-perfection-production.up.railway.app',
     'https://ledger.vmsambitiousgroup.com',
+    'http://10.255.254.73:5173',
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
