@@ -40,9 +40,11 @@ export function printFacilityTransaction({ facility, transaction, company }) {
             box-sizing: border-box;
           }
 
+          html,
           body {
             margin: 0;
             padding: 0;
+            width: 100%;
             background: #f3f4f6;
             font-family:
               Inter,
@@ -55,31 +57,37 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
           .page {
             width: 210mm;
-            min-height: 297mm;
+            height: 297mm;
             margin: 20px auto;
             background: white;
-            padding: 45px;
+            padding: 28px 32px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
           }
+
+          /* ================= HEADER ================= */
 
           .header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            padding-bottom: 28px;
+            padding-bottom: 18px;
             border-bottom: 2px solid #172033;
+            flex-shrink: 0;
           }
 
           .company-name {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
             letter-spacing: -0.5px;
           }
 
           .document-title {
-            margin-top: 8px;
-            font-size: 12px;
+            margin-top: 5px;
+            font-size: 10px;
             color: #667085;
-            letter-spacing: 1.5px;
+            letter-spacing: 1.4px;
           }
 
           .receipt-label {
@@ -88,71 +96,76 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
           .receipt-label span {
             display: block;
-            font-size: 11px;
+            font-size: 9px;
             color: #667085;
             text-transform: uppercase;
             letter-spacing: 1px;
           }
 
           .receipt-number {
-            margin-top: 6px;
-            font-size: 16px;
+            margin-top: 5px;
+            font-size: 14px;
             font-weight: 700;
           }
 
           .status {
             display: inline-block;
-            margin-top: 12px;
-            padding: 7px 12px;
+            margin-top: 8px;
+            padding: 5px 10px;
             border-radius: 999px;
             background: #ecfdf3;
             color: #027a48;
-            font-size: 11px;
+            font-size: 9px;
             font-weight: 700;
             letter-spacing: 0.7px;
           }
 
+          /* ================= SECTIONS ================= */
+
           .section {
-            margin-top: 34px;
+            margin-top: 20px;
+            flex-shrink: 0;
           }
 
           .section-title {
-            margin-bottom: 16px;
-            font-size: 11px;
+            margin-bottom: 10px;
+            font-size: 10px;
             font-weight: 700;
             color: #667085;
-            letter-spacing: 1.2px;
+            letter-spacing: 1.1px;
             text-transform: uppercase;
           }
 
+          /* ================= TRANSACTION ================= */
+
           .transaction-type {
-            padding: 22px;
+            padding: 15px 18px;
             border: 1px solid #e4e7ec;
-            border-radius: 10px;
+            border-radius: 8px;
           }
 
           .transaction-type span {
             display: block;
-            font-size: 12px;
+            font-size: 10px;
             color: #667085;
-            margin-bottom: 7px;
+            margin-bottom: 5px;
           }
 
           .transaction-type strong {
-            font-size: 22px;
+            font-size: 18px;
           }
 
           .amount-box {
-            margin-top: 18px;
-            padding: 24px;
+            margin-top: 10px;
+            padding: 17px 20px;
             background: #172033;
-            border-radius: 10px;
+            border-radius: 8px;
             color: white;
           }
 
           .amount-box span {
             display: block;
-            font-size: 11px;
+            font-size: 9px;
             opacity: 0.7;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -160,53 +173,63 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
           .amount-box strong {
             display: block;
-            margin-top: 8px;
-            font-size: 28px;
+            margin-top: 5px;
+            font-size: 24px;
           }
+
+          /* ================= GRID ================= */
 
           .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 14px;
+            gap: 9px;
           }
 
           .field {
-            padding: 16px;
+            padding: 11px 14px;
             border: 1px solid #e4e7ec;
-            border-radius: 8px;
+            border-radius: 7px;
+            min-height: 60px;
           }
 
           .field-label {
             display: block;
-            font-size: 10px;
+            font-size: 9px;
             color: #667085;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
-            margin-bottom: 7px;
+            letter-spacing: 0.7px;
+            margin-bottom: 5px;
           }
 
           .field-value {
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
-            line-height: 1.5;
+            line-height: 1.35;
+            word-break: break-word;
           }
 
+          /* ================= REMARKS ================= */
+
           .remarks {
-            padding: 18px;
+            padding: 12px 15px;
             background: #f8fafc;
             border-left: 3px solid #172033;
-            line-height: 1.6;
+            line-height: 1.45;
+            font-size: 12px;
             color: #475467;
           }
 
+          /* ================= FOOTER ================= */
+
           .footer {
-            margin-top: 70px;
-            padding-top: 20px;
+            margin-top: auto;
+            padding-top: 14px;
             border-top: 1px solid #e4e7ec;
             display: flex;
             justify-content: space-between;
-            font-size: 10px;
+            font-size: 9px;
             color: #98a2b3;
+            flex-shrink: 0;
           }
 
           .print-button {
@@ -222,25 +245,45 @@ export function printFacilityTransaction({ facility, transaction, company }) {
             cursor: pointer;
           }
 
+          /* ================= PRINT ================= */
+
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+
           @media print {
+            html,
             body {
+              width: 210mm;
+              height: 297mm;
               background: white;
+              overflow: hidden;
             }
 
             .page {
+              width: 210mm;
+              height: 297mm;
+              min-height: 297mm;
               margin: 0;
-              width: 100%;
-              min-height: auto;
-              padding: 35px;
+              padding: 28px 32px;
+              overflow: hidden;
+              page-break-after: avoid;
+              page-break-before: avoid;
+            }
+
+            .section {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+
+            .footer {
+              break-inside: avoid;
+              page-break-inside: avoid;
             }
 
             .print-button {
               display: none;
-            }
-
-            @page {
-              size: A4;
-              margin: 0;
             }
           }
         </style>
@@ -320,86 +363,51 @@ export function printFacilityTransaction({ facility, transaction, company }) {
             <div class="grid">
 
               <div class="field">
-
-                <span class="field-label">
-                  Facility Reference
-                </span>
-
+                <span class="field-label">Facility Reference</span>
                 <div class="field-value">
                   ${facility.reference_number || "—"}
                 </div>
-
               </div>
 
-
               <div class="field">
-
-                <span class="field-label">
-                  Facility Type
-                </span>
-
+                <span class="field-label">Facility Type</span>
                 <div class="field-value">
                   ${facility.facility_type || "—"}
                 </div>
-
               </div>
 
-
               <div class="field">
-
-                <span class="field-label">
-                  Lender
-                </span>
-
+                <span class="field-label">Lender</span>
                 <div class="field-value">
                   ${facility.lender_company_name || "—"}
                 </div>
-
               </div>
 
-
               <div class="field">
-
-                <span class="field-label">
-                  Borrower
-                </span>
-
+                <span class="field-label">Borrower</span>
                 <div class="field-value">
                   ${facility.borrower_company_name || "—"}
                 </div>
-
               </div>
 
-
               <div class="field">
-
-                <span class="field-label">
-                  Principal Amount
-                </span>
-
+                <span class="field-label">Principal Amount</span>
                 <div class="field-value">
                   ${formatAmount(
                     facility.principal_amount,
                     facility.currency_code,
                   )}
                 </div>
-
               </div>
 
-
               <div class="field">
-
-                <span class="field-label">
-                  Outstanding Balance
-                </span>
-
+                <span class="field-label">Outstanding Balance</span>
                 <div class="field-value">
                   ${formatAmount(
                     facility.outstanding_amount,
                     facility.currency_code,
                   )}
                 </div>
-
               </div>
 
             </div>
@@ -416,28 +424,17 @@ export function printFacilityTransaction({ facility, transaction, company }) {
             <div class="grid">
 
               <div class="field">
-
-                <span class="field-label">
-                  Date & Time
-                </span>
-
+                <span class="field-label">Date & Time</span>
                 <div class="field-value">
                   ${formatDate(transaction.created_at)}
                 </div>
-
               </div>
 
-
               <div class="field">
-
-                <span class="field-label">
-                  Performed By
-                </span>
-
+                <span class="field-label">Performed By</span>
                 <div class="field-value">
                   ${transaction.performed_by_name || "System"}
                 </div>
-
               </div>
 
             </div>
