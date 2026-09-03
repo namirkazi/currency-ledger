@@ -4,6 +4,12 @@ export function printFacilityTransaction({
   company,
   transactions = [],
 }) {
+  /*
+   * ============================================================
+   * AMOUNT FORMATTER
+   * ============================================================
+   */
+
   const formatAmount = (amount, currency) => {
     return `${currency || ""} ${Number(amount || 0).toLocaleString(undefined, {
       minimumFractionDigits: 2,
@@ -11,89 +17,277 @@ export function printFacilityTransaction({
     })}`;
   };
 
+  /*
+   * ============================================================
+   * DATE FORMATTER
+   * ============================================================
+   *
+   * Database timestamps are stored as UTC.
+   * Convert explicitly to Dubai time.
+   */
+
   const formatDate = (date) => {
     if (!date) return "—";
 
-    return new Date(date).toLocaleString(undefined, {
+    let parsedDate;
+
+    if (date instanceof Date) {
+      parsedDate = date;
+    } else {
+      let normalizedDate = String(date).replace(" ", "T");
+
+      /*
+       * MySQL returns:
+       * 2026-09-03 11:49:00
+       *
+       * Treat it as UTC if no timezone exists.
+       */
+
+      if (
+        !normalizedDate.endsWith("Z") &&
+        !/[+-]\d{2}:\d{2}$/.test(normalizedDate)
+      ) {
+        normalizedDate += "Z";
+      }
+
+      parsedDate = new Date(normalizedDate);
+    }
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "—";
+    }
+
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Dubai",
       year: "numeric",
       month: "long",
       day: "numeric",
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit",
-    });
+      hour12: true,
+    }).format(parsedDate);
   };
 
-  const currency = facility.currency_code || "";
+  /*
+   * ============================================================
+   * FIND THE EXACT LEDGER ENTRY
+   * ============================================================
+   *
+   * transactions contains facility_ledger_entries returned by:
+   *
+   * details.php
+   *
+   * We find the exact historical ledger row corresponding to the
+   * transaction being printed.
+   *
+   * This is important because outstanding_after is stored there.
+   */
+
+  let ledgerEntry = null;
+
+  /*
+   * First try matching transaction.id directly.
+   */
+
+  if (transaction?.id !== undefined && transaction?.id !== null) {
+    ledgerEntry = transactions.find(
+      (entry) => String(entry.id) === String(transaction.id),
+    );
+  }
+
+  /*
+   * If transaction contains a ledger_entry_id, use that.
+   */
+
+  if (
+    !ledgerEntry &&
+    transaction?.ledger_entry_id !== undefined &&
+    transaction?.ledger_entry_id !== null
+  ) {
+    ledgerEntry = transactions.find(
+      (entry) => String(entry.id) === String(transaction.ledger_entry_id),
+    );
+  }
+
+  /*
+   * Fallback:
+   *
+   * Match using facility, type, amount and timestamp.
+   */
+
+  if (!ledgerEntry) {
+    ledgerEntry = transactions.find((entry) => {
+      const sameFacility =
+        String(entry.facility_id) === String(transaction.facility_id);
+
+      const sameType =
+        String(entry.entry_type || "").toUpperCase() ===
+        String(transaction.entry_type || "").toUpperCase();
+
+      const sameAmount =
+        Number(entry.amount || 0) === Number(transaction.amount || 0);
+
+      const sameDate =
+        String(entry.created_at || "") === String(transaction.created_at || "");
+
+      return sameFacility && sameType && sameAmount && sameDate;
+    });
+  }
+
+  /*
+   * Final fallback.
+   *
+   * If the transaction itself already contains the ledger data,
+   * use it directly.
+   */
+
+  if (!ledgerEntry) {
+    ledgerEntry = transaction;
+  }
 
   /*
    * ============================================================
-   * FACILITY FINANCIAL CALCULATIONS
+   * BASIC VALUES
    * ============================================================
    */
 
-  const principalAmount = Number(facility.principal_amount || 0);
+  const currency =
+    ledgerEntry?.currency_code ||
+    transaction?.currency_code ||
+    facility?.currency_code ||
+    "";
 
-  const interestRate = Number(facility.interest_rate || 0);
+  const principalAmount = Number(facility?.principal_amount || 0);
+
+  const interestRate = Number(facility?.interest_rate || 0);
 
   /*
-   * Prefer the backend-calculated interest amount.
+   * ============================================================
+   * FACILITY INTEREST
+   * ============================================================
    *
-   * Fallback to frontend calculation only if necessary.
+   * IMPORTANT:
+   *
+   * Do NOT use ledgerEntry.interest_amount for repayments.
+   *
+   * A repayment entry normally has:
+   *
+   * interest_amount = 0
+   *
+   * That does NOT mean the facility has zero interest.
+   *
+   * We want the actual agreed facility interest.
    */
 
-  const interestAmount =
-    transaction.interest_amount !== undefined &&
-    transaction.interest_amount !== null
-      ? Number(transaction.interest_amount)
-      : facility.calculated_interest_amount !== undefined &&
-          facility.calculated_interest_amount !== null
-        ? Number(facility.calculated_interest_amount)
-        : (principalAmount * interestRate) / 100;
+  let interestAmount = 0;
+
+  if (
+    facility?.interest_amount !== undefined &&
+    facility?.interest_amount !== null
+  ) {
+    interestAmount = Number(facility.interest_amount);
+  } else if (
+    facility?.calculated_interest_amount !== undefined &&
+    facility?.calculated_interest_amount !== null
+  ) {
+    interestAmount = Number(facility.calculated_interest_amount);
+  } else {
+    interestAmount = (principalAmount * interestRate) / 100;
+  }
 
   /*
-   * Total facility obligation.
-   *
-   * Principal + Interest
+   * ============================================================
+   * TOTAL FACILITY AMOUNT
+   * ============================================================
    */
 
-  const totalFacilityAmount =
-    transaction.total_facility_amount !== undefined &&
-    transaction.total_facility_amount !== null
-      ? Number(transaction.total_facility_amount)
-      : facility.total_facility_amount !== undefined &&
-          facility.total_facility_amount !== null
-        ? Number(facility.total_facility_amount)
-        : principalAmount + interestAmount;
+  const totalFacilityAmount = principalAmount + interestAmount;
 
   /*
-   * Historical outstanding balance.
+   * ============================================================
+   * HISTORICAL OUTSTANDING BALANCE
+   * ============================================================
    *
-   * This MUST come from the backend snapshot whenever available.
+   * THIS IS THE CRITICAL PART.
+   *
+   * Do not calculate.
+   * Do not subtract repayments.
+   * Do not use the current facility balance.
+   *
+   * We directly use the value stored in:
+   *
+   * facility_ledger_entries.outstanding_after
    *
    * Example:
    *
-   * Principal: 200,000
-   * Interest: 10,000
-   * Total: 210,000
+   * DISBURSEMENT
+   * outstanding_after = 330,000
    *
-   * Repayment: 100,000
+   * REPAYMENT 30,000
+   * outstanding_after = 300,000
    *
-   * outstanding_after = 110,000
+   * REPAYMENT 100,000
+   * outstanding_after = 200,000
    */
 
-  const outstandingAtTransaction = Number(transaction.outstanding_after ?? 0);
+  const outstandingAtTransaction = Number(
+    ledgerEntry?.outstanding_after ?? transaction?.outstanding_after ?? 0,
+  );
+
+  /*
+   * ============================================================
+   * TRANSACTION VALUES
+   * ============================================================
+   */
+
+  const transactionType =
+    ledgerEntry?.entry_type || transaction?.entry_type || "TRANSACTION";
+
+  const transactionAmount = ledgerEntry?.amount ?? transaction?.amount ?? 0;
+
+  const transactionDate =
+    ledgerEntry?.created_at || transaction?.created_at || null;
+
+  const performedBy =
+    ledgerEntry?.performed_by_name ||
+    transaction?.performed_by_name ||
+    "System";
+
+  const remarks = ledgerEntry?.remarks || transaction?.remarks || "";
+
+  /*
+   * ============================================================
+   * RECEIPT NUMBER
+   * ============================================================
+   */
+
+  const receiptId =
+    ledgerEntry?.id || transaction?.ledger_entry_id || transaction?.id || "0";
+
+  const receiptNumber = `TXN-${String(receiptId).padStart(6, "0")}`;
+
+  /*
+   * ============================================================
+   * OPEN PRINT WINDOW
+   * ============================================================
+   */
+
   const printWindow = window.open("", "_blank", "width=900,height=1000");
 
   if (!printWindow) {
     alert("Please allow popups to print the transaction.");
+
     return;
   }
 
-  const receiptNumber = `TXN-${String(
-    transaction.id || transaction.ledger_entry_id || "0",
-  ).padStart(6, "0")}`;
+  /*
+   * ============================================================
+   * PRINT DOCUMENT
+   * ============================================================
+   */
 
   printWindow.document.write(`
+
     <!DOCTYPE html>
 
     <html>
@@ -102,24 +296,30 @@ export function printFacilityTransaction({
 
         <title>${receiptNumber}</title>
 
+
         <style>
 
           * {
             box-sizing: border-box;
           }
 
+
           html,
           body {
             margin: 0;
             padding: 0;
+
             width: 100%;
+
             background: #f3f4f6;
+
             font-family:
               Inter,
               -apple-system,
               BlinkMacSystemFont,
               "Segoe UI",
               sans-serif;
+
             color: #172033;
           }
 
@@ -127,9 +327,13 @@ export function printFacilityTransaction({
           .page {
             width: 210mm;
             height: 297mm;
+
             margin: 0 auto;
+
             background: white;
+
             padding: 20px 30px;
+
             overflow: hidden;
 
             display: flex;
@@ -143,7 +347,9 @@ export function printFacilityTransaction({
 
           .header {
             display: flex;
+
             justify-content: space-between;
+
             align-items: flex-start;
 
             padding-bottom: 14px;
@@ -157,7 +363,9 @@ export function printFacilityTransaction({
 
           .company-name {
             font-size: 22px;
+
             font-weight: 700;
+
             letter-spacing: -0.5px;
           }
 
@@ -227,6 +435,7 @@ export function printFacilityTransaction({
 
           .section {
             margin-top: 14px;
+
             flex-shrink: 0;
           }
 
@@ -509,6 +718,7 @@ export function printFacilityTransaction({
             .page {
               width: 210mm;
               height: 297mm;
+
               min-height: 297mm;
 
               margin: 0;
@@ -560,6 +770,7 @@ export function printFacilityTransaction({
                 ${company || "Financial Ledger"}
               </div>
 
+
               <div class="document-title">
                 FINANCIAL TRANSACTION RECEIPT
               </div>
@@ -573,9 +784,11 @@ export function printFacilityTransaction({
                 Transaction Reference
               </span>
 
+
               <div class="receipt-number">
                 ${receiptNumber}
               </div>
+
 
               <div class="status">
                 RECORDED
@@ -601,11 +814,9 @@ export function printFacilityTransaction({
                 Transaction Type
               </span>
 
+
               <strong>
-                ${(transaction.entry_type || "TRANSACTION").replaceAll(
-                  "_",
-                  " ",
-                )}
+                ${String(transactionType).replaceAll("_", " ").toUpperCase()}
               </strong>
 
             </div>
@@ -617,8 +828,9 @@ export function printFacilityTransaction({
                 Transaction Amount
               </span>
 
+
               <strong>
-                ${formatAmount(transaction.amount, currency)}
+                ${formatAmount(transactionAmount, currency)}
               </strong>
 
             </div>
@@ -643,8 +855,9 @@ export function printFacilityTransaction({
                   Facility Reference
                 </span>
 
+
                 <div class="field-value">
-                  ${facility.reference_number || "—"}
+                  ${facility?.reference_number || "—"}
                 </div>
 
               </div>
@@ -656,8 +869,9 @@ export function printFacilityTransaction({
                   Facility Type
                 </span>
 
+
                 <div class="field-value">
-                  ${facility.facility_type || "—"}
+                  ${facility?.facility_type || "—"}
                 </div>
 
               </div>
@@ -669,8 +883,9 @@ export function printFacilityTransaction({
                   Lender
                 </span>
 
+
                 <div class="field-value">
-                  ${facility.lender_company_name || "—"}
+                  ${facility?.lender_company_name || "—"}
                 </div>
 
               </div>
@@ -682,8 +897,9 @@ export function printFacilityTransaction({
                   Borrower
                 </span>
 
+
                 <div class="field-value">
-                  ${facility.borrower_company_name || "—"}
+                  ${facility?.borrower_company_name || "—"}
                 </div>
 
               </div>
@@ -711,6 +927,7 @@ export function printFacilityTransaction({
                   Principal Amount
                 </span>
 
+
                 <span class="summary-value">
                   ${formatAmount(principalAmount, currency)}
                 </span>
@@ -723,6 +940,7 @@ export function printFacilityTransaction({
                 <span class="summary-label">
                   Interest Rate
                 </span>
+
 
                 <span class="summary-value">
                   ${interestRate.toFixed(2)}%
@@ -737,6 +955,7 @@ export function printFacilityTransaction({
                   Interest Amount
                 </span>
 
+
                 <span class="summary-value">
                   ${formatAmount(interestAmount, currency)}
                 </span>
@@ -749,6 +968,7 @@ export function printFacilityTransaction({
                 <span class="summary-label">
                   Total Facility Amount
                 </span>
+
 
                 <span class="summary-value">
                   ${formatAmount(totalFacilityAmount, currency)}
@@ -763,12 +983,12 @@ export function printFacilityTransaction({
                   Outstanding Balance After Transaction
                 </span>
 
+
                 <span class="summary-value">
                   ${formatAmount(outstandingAtTransaction, currency)}
                 </span>
 
               </div>
-
 
             </div>
 
@@ -792,8 +1012,9 @@ export function printFacilityTransaction({
                   Date & Time
                 </span>
 
+
                 <div class="field-value">
-                  ${formatDate(transaction.created_at)}
+                  ${formatDate(transactionDate)}
                 </div>
 
               </div>
@@ -805,8 +1026,9 @@ export function printFacilityTransaction({
                   Performed By
                 </span>
 
+
                 <div class="field-value">
-                  ${transaction.performed_by_name || "System"}
+                  ${performedBy}
                 </div>
 
               </div>
@@ -817,7 +1039,7 @@ export function printFacilityTransaction({
 
 
           ${
-            transaction.remarks
+            remarks
               ? `
                 <div class="section">
 
@@ -825,8 +1047,9 @@ export function printFacilityTransaction({
                     Remarks
                   </div>
 
+
                   <div class="remarks">
-                    ${transaction.remarks}
+                    ${remarks}
                   </div>
 
                 </div>
@@ -842,6 +1065,7 @@ export function printFacilityTransaction({
             <span>
               Generated from Financial Facility Ledger
             </span>
+
 
             <span>
               ${formatDate(new Date())}
@@ -864,6 +1088,7 @@ export function printFacilityTransaction({
       </body>
 
     </html>
+
   `);
 
   printWindow.document.close();
