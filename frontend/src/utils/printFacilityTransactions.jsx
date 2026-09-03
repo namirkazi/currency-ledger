@@ -125,7 +125,6 @@ export function printFacilityTransaction({
       outstandingAtTransaction = totalFacilityAmount;
     }
   }
-  const outstandingAtTransaction = calculateHistoricalOutstanding();
 
   const printWindow = window.open("", "_blank", "width=900,height=1000");
 
