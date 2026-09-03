@@ -330,7 +330,38 @@ try {
         6
     );
 
+    /*
+|--------------------------------------------------------------------------
+| Current Outstanding Balance
+|--------------------------------------------------------------------------
+|
+| Use the latest ledger entry's stored outstanding_after value.
+| This avoids recalculating historical balances.
+|
+*/
 
+    $currentOutstanding = bcadd(
+        (string)$facility['outstanding_amount'],
+        '0',
+        6
+    );
+
+    if (!empty($ledgerEntries)) {
+
+        $latestEntry = $ledgerEntries[0];
+
+        if (
+            isset($latestEntry['outstanding_after']) &&
+            $latestEntry['outstanding_after'] !== null
+        ) {
+
+            $currentOutstanding = bcadd(
+                (string)$latestEntry['outstanding_after'],
+                '0',
+                6
+            );
+        }
+    }
     /*
     |--------------------------------------------------------------------------
     | Response
@@ -359,10 +390,11 @@ try {
             $totalFacilityAmount,
 
             /*
-             * Current/latest outstanding balance.
-             */
+ * Current/latest outstanding balance.
+ * Taken from the latest ledger snapshot.
+ */
             'outstanding_amount' =>
-            $facility['outstanding_amount'],
+            $currentOutstanding,
 
             'total_disbursed' =>
             $totalDisbursed,
