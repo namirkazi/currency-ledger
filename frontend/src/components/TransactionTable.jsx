@@ -5,17 +5,13 @@ function formatNumber(value) {
   });
 }
 
-function formatCurrency(amount, code) {
-  return `${formatNumber(amount)} ${code || ""}`;
-}
-
 export default function TransactionTable({ transactions = [] }) {
   return (
     <div className="table-card">
       <div className="table-header">
         <div>
-          <h3>Recent Exchanges</h3>
-          <p>Latest currency exchange activity</p>
+          <h3>Recent Transactions</h3>
+          <p>Latest trading activity and realized profit</p>
         </div>
       </div>
 
@@ -27,6 +23,7 @@ export default function TransactionTable({ transactions = [] }) {
               <th>From</th>
               <th>To</th>
               <th>Rate</th>
+              <th>Realized Profit</th>
               <th>User</th>
               <th>Date</th>
             </tr>
@@ -35,30 +32,61 @@ export default function TransactionTable({ transactions = [] }) {
           <tbody>
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan="6" className="empty">
-                  No exchanges yet.
+                <td colSpan="7" className="empty">
+                  No transactions yet.
                 </td>
               </tr>
             ) : (
-              transactions.map((tx) => (
-                <tr key={tx.id}>
-                  <td>
-                    <span className="trade-badge buy">EXCHANGE</span>
-                  </td>
+              transactions.map((tx) => {
+                const isSell = tx.type === "SELL";
 
-                  <td>
-                    {formatCurrency(tx.from_amount, tx.from_currency_code)}
-                  </td>
+                return (
+                  <tr key={tx.id}>
+                    <td>
+                      <span
+                        className={`trade-badge ${
+                          tx.type === "BUY" ? "buy" : "sell"
+                        }`}
+                      >
+                        {tx.type}
+                      </span>
+                    </td>
 
-                  <td>{formatCurrency(tx.to_amount, tx.to_currency_code)}</td>
+                    <td>
+                      {formatNumber(tx.from_amount)} {tx.from_currency_code}
+                    </td>
 
-                  <td>{formatNumber(tx.exchange_rate)}</td>
+                    <td>
+                      {formatNumber(tx.to_amount)} {tx.to_currency_code}
+                    </td>
 
-                  <td>{tx.user_name}</td>
+                    <td>{formatNumber(tx.exchange_rate)}</td>
 
-                  <td>{new Date(tx.created_at).toLocaleString()}</td>
-                </tr>
-              ))
+                    <td
+                      className={
+                        isSell
+                          ? Number(tx.realized_profit) >= 0
+                            ? "profit"
+                            : "loss"
+                          : ""
+                      }
+                    >
+                      {isSell ? (
+                        <>
+                          {Number(tx.realized_profit) > 0 ? "+" : ""}
+                          {formatNumber(tx.realized_profit)} AED
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+
+                    <td>{tx.user_name}</td>
+
+                    <td>{new Date(tx.created_at).toLocaleString()}</td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
