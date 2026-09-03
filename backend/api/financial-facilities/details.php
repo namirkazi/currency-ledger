@@ -341,7 +341,7 @@ try {
 */
 
     $currentOutstanding = bcadd(
-        (string)$facility['outstanding_after'],
+        (string)$facility['outstanding_amount'],
         '0',
         6
     );
@@ -393,7 +393,7 @@ try {
  * Current/latest outstanding balance.
  * Taken from the latest ledger snapshot.
  */
-            'outstanding_after' =>
+            'outstanding_amount' =>
             $currentOutstanding,
 
             'total_disbursed' =>
