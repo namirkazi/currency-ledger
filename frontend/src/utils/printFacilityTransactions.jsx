@@ -36,204 +36,95 @@ export function printFacilityTransaction({
   const interestRate = Number(facility.interest_rate || 0);
 
   /*
-   * Calculate the facility interest directly.
+   * Prefer the backend-calculated interest amount.
+   *
+   * Fallback to frontend calculation only if necessary.
+   */
+
+  const interestAmount =
+    transaction.interest_amount !== undefined &&
+    transaction.interest_amount !== null
+      ? Number(transaction.interest_amount)
+      : facility.calculated_interest_amount !== undefined &&
+          facility.calculated_interest_amount !== null
+        ? Number(facility.calculated_interest_amount)
+        : (principalAmount * interestRate) / 100;
+
+  /*
+   * Total facility obligation.
+   *
+   * Principal + Interest
+   */
+
+  const totalFacilityAmount =
+    transaction.total_facility_amount !== undefined &&
+    transaction.total_facility_amount !== null
+      ? Number(transaction.total_facility_amount)
+      : facility.total_facility_amount !== undefined &&
+          facility.total_facility_amount !== null
+        ? Number(facility.total_facility_amount)
+        : principalAmount + interestAmount;
+
+  /*
+   * Historical outstanding balance.
+   *
+   * This MUST come from the backend snapshot whenever available.
    *
    * Example:
    *
-   * Principal = 200,000
-   * Interest Rate = 5%
+   * Principal: 200,000
+   * Interest: 10,000
+   * Total: 210,000
    *
-   * Interest = 10,000
+   * Repayment: 100,000
+   *
+   * outstanding_after = 110,000
    */
 
-  const interestAmount = (principalAmount * interestRate) / 100;
+  let outstandingAtTransaction = 0;
 
   /*
-   * Total amount owed on the facility.
+   * Best case:
    *
-   * Example:
-   *
-   * 200,000 principal
-   * + 10,000 interest
-   * = 210,000 total
+   * The transaction itself already contains the historical snapshot.
    */
 
-  const totalFacilityAmount = principalAmount + interestAmount;
-
-  /*
-   * ============================================================
-   * HISTORICAL OUTSTANDING BALANCE
-   * ============================================================
-   *
-   * We NEVER use:
-   *
-   * facility.outstanding_amount
-   *
-   * because that is the CURRENT balance.
-   *
-   * Old receipts must show the balance at the time
-   * that transaction occurred.
-   */
-
-  const normalizeTransactionId = (item) => {
-    return Number(item.id || item.ledger_entry_id || 0);
-  };
-
-  const getTransactionDate = (item) => {
-    if (!item?.created_at) return 0;
-
-    return new Date(item.created_at).getTime();
-  };
-
-  /*
-   * Sort all transactions chronologically.
-   */
-
-  const sortedTransactions = [...transactions].sort((a, b) => {
-    const dateDifference = getTransactionDate(a) - getTransactionDate(b);
-
-    if (dateDifference !== 0) {
-      return dateDifference;
-    }
-
-    return normalizeTransactionId(a) - normalizeTransactionId(b);
-  });
-
-  /*
-   * Find whether we actually received transaction history.
-   */
-
-  const hasTransactionHistory = sortedTransactions.length > 0;
-
-  const currentTransactionId = normalizeTransactionId(transaction);
-
-  /*
-   * Calculate the outstanding balance after
-   * the selected transaction.
-   */
-
-  const calculateHistoricalOutstanding = () => {
+  if (
+    transaction.outstanding_after !== undefined &&
+    transaction.outstanding_after !== null
+  ) {
+    outstandingAtTransaction = Number(transaction.outstanding_after);
+  } else {
     /*
-     * If backend already gives us the historical snapshot,
-     * use that first.
+     * Fallback:
+     *
+     * Try finding the matching ledger entry.
      */
+    const transactionId = Number(
+      transaction.id || transaction.ledger_entry_id || 0,
+    );
+
+    const matchingEntry = transactions.find((item) => {
+      const itemId = Number(item.id || item.ledger_entry_id || 0);
+
+      return itemId === transactionId;
+    });
 
     if (
-      transaction.outstanding_after !== undefined &&
-      transaction.outstanding_after !== null
+      matchingEntry &&
+      matchingEntry.outstanding_after !== undefined &&
+      matchingEntry.outstanding_after !== null
     ) {
-      return Number(transaction.outstanding_after);
-    }
-
-    if (
-      transaction.remaining_outstanding !== undefined &&
-      transaction.remaining_outstanding !== null
+      outstandingAtTransaction = Number(matchingEntry.outstanding_after);
+    } else if (
+      /*
+       * Last fallback for a disbursement.
+       */
+      String(transaction.entry_type || "").toUpperCase() === "DISBURSEMENT"
     ) {
-      return Number(transaction.remaining_outstanding);
+      outstandingAtTransaction = totalFacilityAmount;
     }
-
-    /*
-     * If we have all transaction history,
-     * reconstruct the balance.
-     */
-
-    if (hasTransactionHistory) {
-      let outstanding = 0;
-      let facilityActivated = false;
-
-      for (const item of sortedTransactions) {
-        const entryType = String(item.entry_type || "").toUpperCase();
-
-        const amount = Number(item.amount || 0);
-
-        /*
-         * When the facility is disbursed,
-         * the borrower becomes liable for:
-         *
-         * Principal + Interest
-         *
-         * We only activate this once.
-         */
-
-        if (entryType === "DISBURSEMENT" && !facilityActivated) {
-          outstanding += totalFacilityAmount;
-          facilityActivated = true;
-        }
-
-        /*
-         * Repayments reduce the outstanding balance.
-         */
-
-        if (entryType === "REPAYMENT" || entryType === "SETTLEMENT") {
-          outstanding -= amount;
-        }
-
-        /*
-         * Additional interest entries increase
-         * outstanding if your system creates them.
-         */
-
-        if (entryType === "INTEREST") {
-          outstanding += amount;
-        }
-
-        /*
-         * Adjustments.
-         *
-         * Positive amount increases balance.
-         * Negative amount decreases balance.
-         */
-
-        if (entryType === "ADJUSTMENT") {
-          outstanding += amount;
-        }
-
-        /*
-         * Never allow negative outstanding balance.
-         */
-
-        if (outstanding < 0) {
-          outstanding = 0;
-        }
-
-        /*
-         * Stop once we reach the transaction
-         * currently being printed.
-         */
-
-        if (normalizeTransactionId(item) === currentTransactionId) {
-          break;
-        }
-      }
-
-      return outstanding;
-    }
-
-    /*
-     * Fallback when only one transaction is available.
-     *
-     * For a DISBURSEMENT receipt we know exactly
-     * what the outstanding amount becomes.
-     */
-
-    const transactionType = String(transaction.entry_type || "").toUpperCase();
-
-    if (transactionType === "DISBURSEMENT") {
-      return totalFacilityAmount;
-    }
-
-    /*
-     * We intentionally DO NOT use:
-     *
-     * facility.outstanding_amount
-     *
-     * because it represents today's balance and would
-     * make historical receipts incorrect.
-     */
-
-    return 0;
-  };
-
+  }
   const outstandingAtTransaction = calculateHistoricalOutstanding();
 
   const printWindow = window.open("", "_blank", "width=900,height=1000");

@@ -5,7 +5,6 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../helpers/auth.php';
 require_once __DIR__ . '/../../helpers/response.php';
 
-
 requireAuth();
 
 
@@ -123,8 +122,61 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Get Facility Ledger
+    | Calculate Facility Interest
     |--------------------------------------------------------------------------
+    |
+    | Example:
+    |
+    | Principal: 200,000
+    | Interest Rate: 5%
+    |
+    | Interest: 10,000
+    | Total Facility: 210,000
+    |
+    */
+
+    $principalAmount = bcadd(
+        (string)$facility['principal_amount'],
+        '0',
+        6
+    );
+
+
+    $interestRate = bcadd(
+        (string)$facility['interest_rate'],
+        '0',
+        6
+    );
+
+
+    $interestAmount = bcdiv(
+        bcmul(
+            $principalAmount,
+            $interestRate,
+            6
+        ),
+        '100',
+        6
+    );
+
+
+    $totalFacilityAmount = bcadd(
+        $principalAmount,
+        $interestAmount,
+        6
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Facility Ledger Chronologically
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | We fetch ASC here because we need to calculate the historical
+    | balance step-by-step.
+    |
     */
 
     $ledgerStmt = $pdo->prepare("
@@ -153,8 +205,8 @@ try {
         WHERE fle.facility_id = ?
 
         ORDER BY
-            fle.created_at DESC,
-            fle.id DESC
+            fle.created_at ASC,
+            fle.id ASC
     ");
 
 
@@ -170,64 +222,208 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Calculate Summary
+    | Calculate Historical Balance For Every Transaction
     |--------------------------------------------------------------------------
+    |
+    | This creates a permanent snapshot in the API response.
+    |
+    | Example:
+    |
+    | Facility Total = 210,000
+    |
+    | DISBURSEMENT 200,000
+    | Outstanding After = 210,000
+    |
+    | REPAYMENT 100,000
+    | Outstanding After = 110,000
+    |
+    | REPAYMENT 50,000
+    | Outstanding After = 60,000
+    |
+    | Old receipts will therefore always know the correct balance
+    | at that specific transaction.
+    |
     */
+
+    $runningOutstanding = '0';
+
+    $facilityActivated = false;
 
     $totalDisbursed = '0';
     $totalRepaid = '0';
-    $totalInterest = '0';
+    $totalLedgerInterest = '0';
     $totalAdjustments = '0';
 
 
-    foreach ($ledgerEntries as $entry) {
+    foreach ($ledgerEntries as &$entry) {
 
-        switch ($entry['entry_type']) {
-
-            case 'DISBURSEMENT':
-
-                $totalDisbursed = bcadd(
-                    $totalDisbursed,
-                    $entry['amount'],
-                    6
-                );
-
-                break;
+        $entryType = strtoupper(
+            (string)$entry['entry_type']
+        );
 
 
-            case 'REPAYMENT':
-
-                $totalRepaid = bcadd(
-                    $totalRepaid,
-                    $entry['amount'],
-                    6
-                );
-
-                break;
+        $entryAmount = bcadd(
+            (string)$entry['amount'],
+            '0',
+            6
+        );
 
 
-            case 'INTEREST':
+        /*
+        |--------------------------------------------------------------------------
+        | DISBURSEMENT
+        |--------------------------------------------------------------------------
+        |
+        | The facility obligation becomes:
+        |
+        | Principal + calculated interest
+        |
+        | We activate this only once.
+        |
+        */
 
-                $totalInterest = bcadd(
-                    $totalInterest,
-                    $entry['amount'],
-                    6
-                );
+        if (
+            $entryType === 'DISBURSEMENT' &&
+            !$facilityActivated
+        ) {
 
-                break;
+            $runningOutstanding = $totalFacilityAmount;
+
+            $facilityActivated = true;
 
 
-            case 'ADJUSTMENT':
-
-                $totalAdjustments = bcadd(
-                    $totalAdjustments,
-                    $entry['amount'],
-                    6
-                );
-
-                break;
+            $totalDisbursed = bcadd(
+                $totalDisbursed,
+                $entryAmount,
+                6
+            );
         }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | REPAYMENT / SETTLEMENT
+        |--------------------------------------------------------------------------
+        */ elseif (
+            $entryType === 'REPAYMENT' ||
+            $entryType === 'SETTLEMENT'
+        ) {
+
+            $runningOutstanding = bcsub(
+                $runningOutstanding,
+                $entryAmount,
+                6
+            );
+
+
+            $totalRepaid = bcadd(
+                $totalRepaid,
+                $entryAmount,
+                6
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Additional Interest
+        |--------------------------------------------------------------------------
+        |
+        | Only ledger interest entries are added here.
+        |
+        | The original facility interest is ALREADY included in
+        | totalFacilityAmount.
+        |
+        */ elseif ($entryType === 'INTEREST') {
+
+            $runningOutstanding = bcadd(
+                $runningOutstanding,
+                $entryAmount,
+                6
+            );
+
+
+            $totalLedgerInterest = bcadd(
+                $totalLedgerInterest,
+                $entryAmount,
+                6
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Adjustment
+        |--------------------------------------------------------------------------
+        */ elseif ($entryType === 'ADJUSTMENT') {
+
+            $runningOutstanding = bcadd(
+                $runningOutstanding,
+                $entryAmount,
+                6
+            );
+
+
+            $totalAdjustments = bcadd(
+                $totalAdjustments,
+                $entryAmount,
+                6
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Prevent Negative Balance
+        |--------------------------------------------------------------------------
+        */
+
+        if (bccomp($runningOutstanding, '0', 6) < 0) {
+            $runningOutstanding = '0.000000';
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Historical Snapshot
+        |--------------------------------------------------------------------------
+        */
+
+        $entry['interest_amount'] =
+            $interestAmount;
+
+        $entry['total_facility_amount'] =
+            $totalFacilityAmount;
+
+        $entry['outstanding_after'] =
+            $runningOutstanding;
     }
+
+
+    unset($entry);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Outstanding
+    |--------------------------------------------------------------------------
+    |
+    | Use calculated ledger balance when transactions exist.
+    |
+    */
+
+    $calculatedOutstanding =
+        $runningOutstanding;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Return Ledger In DESC Order For Frontend Display
+    |--------------------------------------------------------------------------
+    */
+
+    $displayLedgerEntries =
+        array_reverse($ledgerEntries);
 
 
     /*
@@ -239,17 +435,39 @@ try {
     jsonResponse([
         'success' => true,
 
-        'facility' => $facility,
+        'facility' => array_merge(
+            $facility,
+            [
+                'calculated_interest_amount' =>
+                $interestAmount,
 
-        'ledger_entries' => $ledgerEntries,
+                'total_facility_amount' =>
+                $totalFacilityAmount,
+
+                'calculated_outstanding_amount' =>
+                $calculatedOutstanding
+            ]
+        ),
+
+        'ledger_entries' =>
+        $displayLedgerEntries,
 
         'summary' => [
 
             'principal_amount' =>
-            $facility['principal_amount'],
+            $principalAmount,
+
+            'interest_rate' =>
+            $interestRate,
+
+            'interest_amount' =>
+            $interestAmount,
+
+            'total_facility_amount' =>
+            $totalFacilityAmount,
 
             'outstanding_amount' =>
-            $facility['outstanding_amount'],
+            $calculatedOutstanding,
 
             'total_disbursed' =>
             $totalDisbursed,
@@ -258,7 +476,7 @@ try {
             $totalRepaid,
 
             'total_interest' =>
-            $totalInterest,
+            $totalLedgerInterest,
 
             'total_adjustments' =>
             $totalAdjustments,
@@ -273,6 +491,7 @@ try {
         'financial facility details: ' .
             $e->getMessage()
     );
+
 
     jsonResponse([
         'success' => false,
