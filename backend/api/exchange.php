@@ -665,7 +665,7 @@ try {
         $allocationStmt = $pdo->prepare("
             INSERT INTO sale_allocations
             (
-                transaction_id,
+                sale_transaction_id,
                 inventory_lot_id,
                 currency_amount,
                 acquisition_rate,
