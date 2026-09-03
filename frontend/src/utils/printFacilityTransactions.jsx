@@ -1,4 +1,9 @@
-export function printFacilityTransaction({ facility, transaction, company }) {
+export function printFacilityTransaction({
+  facility,
+  transaction,
+  company,
+  transactions = [],
+}) {
   const formatAmount = (amount, currency) => {
     return `${currency || ""} ${Number(amount || 0).toLocaleString(undefined, {
       minimumFractionDigits: 2,
@@ -20,30 +25,216 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
   const currency = facility.currency_code || "";
 
+  /*
+   * ============================================================
+   * FACILITY FINANCIAL CALCULATIONS
+   * ============================================================
+   */
+
   const principalAmount = Number(facility.principal_amount || 0);
 
-  const interestAmount = Number(
-    transaction.interest_amount ?? facility.interest_amount ?? 0,
-  );
-
   const interestRate = Number(facility.interest_rate || 0);
+
+  /*
+   * Calculate the facility interest directly.
+   *
+   * Example:
+   *
+   * Principal = 200,000
+   * Interest Rate = 5%
+   *
+   * Interest = 10,000
+   */
+
+  const interestAmount = (principalAmount * interestRate) / 100;
+
+  /*
+   * Total amount owed on the facility.
+   *
+   * Example:
+   *
+   * 200,000 principal
+   * + 10,000 interest
+   * = 210,000 total
+   */
 
   const totalFacilityAmount = principalAmount + interestAmount;
 
   /*
-   * IMPORTANT:
+   * ============================================================
+   * HISTORICAL OUTSTANDING BALANCE
+   * ============================================================
    *
-   * Use the historical ledger snapshot.
+   * We NEVER use:
    *
-   * Do NOT use facility.outstanding_amount because
-   * that represents today's/current balance.
+   * facility.outstanding_amount
+   *
+   * because that is the CURRENT balance.
+   *
+   * Old receipts must show the balance at the time
+   * that transaction occurred.
    */
 
-  const outstandingAtTransaction =
-    transaction.outstanding_after ??
-    transaction.remaining_outstanding ??
-    facility.outstanding_amount ??
-    0;
+  const normalizeTransactionId = (item) => {
+    return Number(item.id || item.ledger_entry_id || 0);
+  };
+
+  const getTransactionDate = (item) => {
+    if (!item?.created_at) return 0;
+
+    return new Date(item.created_at).getTime();
+  };
+
+  /*
+   * Sort all transactions chronologically.
+   */
+
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    const dateDifference = getTransactionDate(a) - getTransactionDate(b);
+
+    if (dateDifference !== 0) {
+      return dateDifference;
+    }
+
+    return normalizeTransactionId(a) - normalizeTransactionId(b);
+  });
+
+  /*
+   * Find whether we actually received transaction history.
+   */
+
+  const hasTransactionHistory = sortedTransactions.length > 0;
+
+  const currentTransactionId = normalizeTransactionId(transaction);
+
+  /*
+   * Calculate the outstanding balance after
+   * the selected transaction.
+   */
+
+  const calculateHistoricalOutstanding = () => {
+    /*
+     * If backend already gives us the historical snapshot,
+     * use that first.
+     */
+
+    if (
+      transaction.outstanding_after !== undefined &&
+      transaction.outstanding_after !== null
+    ) {
+      return Number(transaction.outstanding_after);
+    }
+
+    if (
+      transaction.remaining_outstanding !== undefined &&
+      transaction.remaining_outstanding !== null
+    ) {
+      return Number(transaction.remaining_outstanding);
+    }
+
+    /*
+     * If we have all transaction history,
+     * reconstruct the balance.
+     */
+
+    if (hasTransactionHistory) {
+      let outstanding = 0;
+      let facilityActivated = false;
+
+      for (const item of sortedTransactions) {
+        const entryType = String(item.entry_type || "").toUpperCase();
+
+        const amount = Number(item.amount || 0);
+
+        /*
+         * When the facility is disbursed,
+         * the borrower becomes liable for:
+         *
+         * Principal + Interest
+         *
+         * We only activate this once.
+         */
+
+        if (entryType === "DISBURSEMENT" && !facilityActivated) {
+          outstanding += totalFacilityAmount;
+          facilityActivated = true;
+        }
+
+        /*
+         * Repayments reduce the outstanding balance.
+         */
+
+        if (entryType === "REPAYMENT" || entryType === "SETTLEMENT") {
+          outstanding -= amount;
+        }
+
+        /*
+         * Additional interest entries increase
+         * outstanding if your system creates them.
+         */
+
+        if (entryType === "INTEREST") {
+          outstanding += amount;
+        }
+
+        /*
+         * Adjustments.
+         *
+         * Positive amount increases balance.
+         * Negative amount decreases balance.
+         */
+
+        if (entryType === "ADJUSTMENT") {
+          outstanding += amount;
+        }
+
+        /*
+         * Never allow negative outstanding balance.
+         */
+
+        if (outstanding < 0) {
+          outstanding = 0;
+        }
+
+        /*
+         * Stop once we reach the transaction
+         * currently being printed.
+         */
+
+        if (normalizeTransactionId(item) === currentTransactionId) {
+          break;
+        }
+      }
+
+      return outstanding;
+    }
+
+    /*
+     * Fallback when only one transaction is available.
+     *
+     * For a DISBURSEMENT receipt we know exactly
+     * what the outstanding amount becomes.
+     */
+
+    const transactionType = String(transaction.entry_type || "").toUpperCase();
+
+    if (transactionType === "DISBURSEMENT") {
+      return totalFacilityAmount;
+    }
+
+    /*
+     * We intentionally DO NOT use:
+     *
+     * facility.outstanding_amount
+     *
+     * because it represents today's balance and would
+     * make historical receipts incorrect.
+     */
+
+    return 0;
+  };
+
+  const outstandingAtTransaction = calculateHistoricalOutstanding();
 
   const printWindow = window.open("", "_blank", "width=900,height=1000");
 
@@ -90,9 +281,9 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           .page {
             width: 210mm;
             height: 297mm;
-            margin: 20px auto;
+            margin: 0 auto;
             background: white;
-            padding: 24px 30px;
+            padding: 20px 30px;
             overflow: hidden;
 
             display: flex;
@@ -100,14 +291,16 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
-          /* HEADER */
+          /* =========================
+             HEADER
+          ========================= */
 
           .header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
 
-            padding-bottom: 16px;
+            padding-bottom: 14px;
 
             border-bottom:
               2px solid #172033;
@@ -182,16 +375,18 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
-          /* SECTIONS */
+          /* =========================
+             SECTIONS
+          ========================= */
 
           .section {
-            margin-top: 16px;
+            margin-top: 14px;
             flex-shrink: 0;
           }
 
 
           .section-title {
-            margin-bottom: 8px;
+            margin-bottom: 7px;
 
             font-size: 10px;
 
@@ -205,10 +400,12 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
-          /* TRANSACTION */
+          /* =========================
+             TRANSACTION
+          ========================= */
 
           .transaction-type {
-            padding: 12px 16px;
+            padding: 11px 16px;
 
             border:
               1px solid #e4e7ec;
@@ -236,7 +433,7 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           .amount-box {
             margin-top: 8px;
 
-            padding: 14px 18px;
+            padding: 13px 18px;
 
             background: #172033;
 
@@ -268,7 +465,9 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
-          /* GRID */
+          /* =========================
+             GRID
+          ========================= */
 
           .grid {
             display: grid;
@@ -288,7 +487,7 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
             border-radius: 7px;
 
-            min-height: 56px;
+            min-height: 54px;
           }
 
 
@@ -318,10 +517,12 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
-          /* SUMMARY */
+          /* =========================
+             FINANCIAL SUMMARY
+          ========================= */
 
           .financial-summary {
-            padding: 14px 16px;
+            padding: 13px 16px;
 
             border:
               1px solid #e4e7ec;
@@ -373,7 +574,9 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
-          /* REMARKS */
+          /* =========================
+             REMARKS
+          ========================= */
 
           .remarks {
             padding: 11px 14px;
@@ -391,12 +594,14 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
-          /* FOOTER */
+          /* =========================
+             FOOTER
+          ========================= */
 
           .footer {
             margin-top: auto;
 
-            padding-top: 12px;
+            padding-top: 10px;
 
             border-top:
               1px solid #e4e7ec;
@@ -457,14 +662,12 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
             .page {
               width: 210mm;
-
               height: 297mm;
-
               min-height: 297mm;
 
               margin: 0;
 
-              padding: 24px 30px;
+              padding: 20px 30px;
 
               overflow: hidden;
 
@@ -537,7 +740,7 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           </div>
 
 
-          <!-- TRANSACTION -->
+          <!-- TRANSACTION DETAILS -->
 
           <div class="section">
 
@@ -577,7 +780,7 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           </div>
 
 
-          <!-- FACILITY -->
+          <!-- FACILITY INFORMATION -->
 
           <div class="section">
 
@@ -726,7 +929,7 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           </div>
 
 
-          <!-- RECORD -->
+          <!-- TRANSACTION RECORD -->
 
           <div class="section">
 
