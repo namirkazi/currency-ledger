@@ -46,7 +46,7 @@ try {
             ff.facility_type,
 
             ff.principal_amount,
-            ff.outstanding_after,
+            ff.outstanding_amount,
 
             ff.interest_rate,
             ff.interest_amount,
