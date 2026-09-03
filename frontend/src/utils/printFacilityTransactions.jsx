@@ -18,6 +18,33 @@ export function printFacilityTransaction({ facility, transaction, company }) {
     });
   };
 
+  const currency = facility.currency_code || "";
+
+  const principalAmount = Number(facility.principal_amount || 0);
+
+  const interestAmount = Number(
+    transaction.interest_amount ?? facility.interest_amount ?? 0,
+  );
+
+  const interestRate = Number(facility.interest_rate || 0);
+
+  const totalFacilityAmount = principalAmount + interestAmount;
+
+  /*
+   * IMPORTANT:
+   *
+   * Use the historical ledger snapshot.
+   *
+   * Do NOT use facility.outstanding_amount because
+   * that represents today's/current balance.
+   */
+
+  const outstandingAtTransaction =
+    transaction.outstanding_after ??
+    transaction.remaining_outstanding ??
+    facility.outstanding_amount ??
+    0;
+
   const printWindow = window.open("", "_blank", "width=900,height=1000");
 
   if (!printWindow) {
@@ -31,11 +58,15 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
   printWindow.document.write(`
     <!DOCTYPE html>
+
     <html>
+
       <head>
+
         <title>${receiptNumber}</title>
 
         <style>
+
           * {
             box-sizing: border-box;
           }
@@ -55,27 +86,35 @@ export function printFacilityTransaction({ facility, transaction, company }) {
             color: #172033;
           }
 
+
           .page {
             width: 210mm;
             height: 297mm;
             margin: 20px auto;
             background: white;
-            padding: 28px 32px;
+            padding: 24px 30px;
             overflow: hidden;
+
             display: flex;
             flex-direction: column;
           }
 
-          /* ================= HEADER ================= */
+
+          /* HEADER */
 
           .header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            padding-bottom: 18px;
-            border-bottom: 2px solid #172033;
+
+            padding-bottom: 16px;
+
+            border-bottom:
+              2px solid #172033;
+
             flex-shrink: 0;
           }
+
 
           .company-name {
             font-size: 22px;
@@ -83,219 +122,391 @@ export function printFacilityTransaction({ facility, transaction, company }) {
             letter-spacing: -0.5px;
           }
 
+
           .document-title {
             margin-top: 5px;
+
             font-size: 10px;
+
             color: #667085;
+
             letter-spacing: 1.4px;
           }
+
 
           .receipt-label {
             text-align: right;
           }
 
+
           .receipt-label span {
             display: block;
+
             font-size: 9px;
+
             color: #667085;
+
             text-transform: uppercase;
+
             letter-spacing: 1px;
           }
+
 
           .receipt-number {
             margin-top: 5px;
+
             font-size: 14px;
+
             font-weight: 700;
           }
+
 
           .status {
             display: inline-block;
+
             margin-top: 8px;
+
             padding: 5px 10px;
+
             border-radius: 999px;
+
             background: #ecfdf3;
+
             color: #027a48;
+
             font-size: 9px;
+
             font-weight: 700;
+
             letter-spacing: 0.7px;
           }
 
-          /* ================= SECTIONS ================= */
+
+          /* SECTIONS */
 
           .section {
-            margin-top: 20px;
+            margin-top: 16px;
             flex-shrink: 0;
           }
 
+
           .section-title {
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+
             font-size: 10px;
+
             font-weight: 700;
+
             color: #667085;
+
             letter-spacing: 1.1px;
+
             text-transform: uppercase;
           }
 
-          /* ================= TRANSACTION ================= */
+
+          /* TRANSACTION */
 
           .transaction-type {
-            padding: 15px 18px;
-            border: 1px solid #e4e7ec;
+            padding: 12px 16px;
+
+            border:
+              1px solid #e4e7ec;
+
             border-radius: 8px;
           }
+
 
           .transaction-type span {
             display: block;
+
             font-size: 10px;
+
             color: #667085;
+
             margin-bottom: 5px;
           }
 
+
           .transaction-type strong {
-            font-size: 18px;
+            font-size: 17px;
           }
 
+
           .amount-box {
-            margin-top: 10px;
-            padding: 17px 20px;
+            margin-top: 8px;
+
+            padding: 14px 18px;
+
             background: #172033;
+
             border-radius: 8px;
+
             color: white;
           }
+
 
           .amount-box span {
             display: block;
+
             font-size: 9px;
+
             opacity: 0.7;
+
             text-transform: uppercase;
+
             letter-spacing: 1px;
           }
 
+
           .amount-box strong {
             display: block;
+
             margin-top: 5px;
-            font-size: 24px;
+
+            font-size: 23px;
           }
 
-          /* ================= GRID ================= */
+
+          /* GRID */
 
           .grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 9px;
+
+            grid-template-columns:
+              1fr 1fr;
+
+            gap: 8px;
           }
 
+
           .field {
-            padding: 11px 14px;
-            border: 1px solid #e4e7ec;
+            padding: 10px 13px;
+
+            border:
+              1px solid #e4e7ec;
+
             border-radius: 7px;
-            min-height: 60px;
+
+            min-height: 56px;
           }
+
 
           .field-label {
             display: block;
+
             font-size: 9px;
+
             color: #667085;
+
             text-transform: uppercase;
+
             letter-spacing: 0.7px;
+
             margin-bottom: 5px;
           }
 
+
           .field-value {
             font-size: 12px;
+
             font-weight: 600;
+
             line-height: 1.35;
+
             word-break: break-word;
           }
 
-          /* ================= REMARKS ================= */
+
+          /* SUMMARY */
+
+          .financial-summary {
+            padding: 14px 16px;
+
+            border:
+              1px solid #e4e7ec;
+
+            border-radius: 8px;
+
+            background: #fafafa;
+          }
+
+
+          .summary-row {
+            display: flex;
+
+            justify-content: space-between;
+
+            padding: 7px 0;
+
+            font-size: 12px;
+
+            border-bottom:
+              1px solid #eaecf0;
+          }
+
+
+          .summary-row:last-child {
+            border-bottom: none;
+          }
+
+
+          .summary-label {
+            color: #667085;
+          }
+
+
+          .summary-value {
+            font-weight: 700;
+          }
+
+
+          .summary-total {
+            margin-top: 4px;
+
+            padding-top: 10px;
+
+            font-size: 14px;
+
+            border-top:
+              2px solid #172033;
+          }
+
+
+          /* REMARKS */
 
           .remarks {
-            padding: 12px 15px;
+            padding: 11px 14px;
+
             background: #f8fafc;
-            border-left: 3px solid #172033;
+
+            border-left:
+              3px solid #172033;
+
             line-height: 1.45;
+
             font-size: 12px;
+
             color: #475467;
           }
 
-          /* ================= FOOTER ================= */
+
+          /* FOOTER */
 
           .footer {
             margin-top: auto;
-            padding-top: 14px;
-            border-top: 1px solid #e4e7ec;
+
+            padding-top: 12px;
+
+            border-top:
+              1px solid #e4e7ec;
+
             display: flex;
+
             justify-content: space-between;
+
             font-size: 9px;
+
             color: #98a2b3;
+
             flex-shrink: 0;
           }
 
+
           .print-button {
             position: fixed;
+
             right: 25px;
+
             bottom: 25px;
+
             padding: 12px 22px;
+
             border: none;
+
             border-radius: 8px;
+
             background: #172033;
+
             color: white;
+
             font-weight: 600;
+
             cursor: pointer;
           }
 
-          /* ================= PRINT ================= */
 
           @page {
             size: A4 portrait;
             margin: 0;
           }
 
+
           @media print {
+
             html,
             body {
               width: 210mm;
               height: 297mm;
+
               background: white;
+
               overflow: hidden;
             }
 
+
             .page {
               width: 210mm;
+
               height: 297mm;
+
               min-height: 297mm;
+
               margin: 0;
-              padding: 28px 32px;
+
+              padding: 24px 30px;
+
               overflow: hidden;
+
               page-break-after: avoid;
+
               page-break-before: avoid;
             }
+
 
             .section {
               break-inside: avoid;
               page-break-inside: avoid;
             }
 
+
             .footer {
               break-inside: avoid;
               page-break-inside: avoid;
             }
 
+
             .print-button {
               display: none;
             }
           }
+
         </style>
+
       </head>
+
 
       <body>
 
         <div class="page">
 
+
+          <!-- HEADER -->
+
           <div class="header">
 
             <div>
+
               <div class="company-name">
                 ${company || "Financial Ledger"}
               </div>
@@ -303,11 +514,15 @@ export function printFacilityTransaction({ facility, transaction, company }) {
               <div class="document-title">
                 FINANCIAL TRANSACTION RECEIPT
               </div>
+
             </div>
+
 
             <div class="receipt-label">
 
-              <span>Transaction Reference</span>
+              <span>
+                Transaction Reference
+              </span>
 
               <div class="receipt-number">
                 ${receiptNumber}
@@ -322,15 +537,20 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           </div>
 
 
+          <!-- TRANSACTION -->
+
           <div class="section">
 
             <div class="section-title">
               Transaction Details
             </div>
 
+
             <div class="transaction-type">
 
-              <span>Transaction Type</span>
+              <span>
+                Transaction Type
+              </span>
 
               <strong>
                 ${(transaction.entry_type || "TRANSACTION").replaceAll(
@@ -341,12 +561,15 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
             </div>
 
+
             <div class="amount-box">
 
-              <span>Transaction Amount</span>
+              <span>
+                Transaction Amount
+              </span>
 
               <strong>
-                ${formatAmount(transaction.amount, facility.currency_code)}
+                ${formatAmount(transaction.amount, currency)}
               </strong>
 
             </div>
@@ -354,60 +577,66 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           </div>
 
 
+          <!-- FACILITY -->
+
           <div class="section">
 
             <div class="section-title">
               Facility Information
             </div>
 
+
             <div class="grid">
 
               <div class="field">
-                <span class="field-label">Facility Reference</span>
+
+                <span class="field-label">
+                  Facility Reference
+                </span>
+
                 <div class="field-value">
                   ${facility.reference_number || "—"}
                 </div>
+
               </div>
 
+
               <div class="field">
-                <span class="field-label">Facility Type</span>
+
+                <span class="field-label">
+                  Facility Type
+                </span>
+
                 <div class="field-value">
                   ${facility.facility_type || "—"}
                 </div>
+
               </div>
 
+
               <div class="field">
-                <span class="field-label">Lender</span>
+
+                <span class="field-label">
+                  Lender
+                </span>
+
                 <div class="field-value">
                   ${facility.lender_company_name || "—"}
                 </div>
+
               </div>
 
+
               <div class="field">
-                <span class="field-label">Borrower</span>
+
+                <span class="field-label">
+                  Borrower
+                </span>
+
                 <div class="field-value">
                   ${facility.borrower_company_name || "—"}
                 </div>
-              </div>
 
-              <div class="field">
-                <span class="field-label">Principal Amount</span>
-                <div class="field-value">
-                  ${formatAmount(
-                    facility.principal_amount,
-                    facility.currency_code,
-                  )}
-                </div>
-              </div>
-
-              <div class="field">
-                <span class="field-label">Outstanding Balance</span>
-                <div class="field-value">
-                  ${formatAmount(
-                    facility.outstanding_amount,
-                    facility.currency_code,
-                  )}
-                </div>
               </div>
 
             </div>
@@ -415,26 +644,122 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           </div>
 
 
+          <!-- FINANCIAL SUMMARY -->
+
+          <div class="section">
+
+            <div class="section-title">
+              Financial Summary
+            </div>
+
+
+            <div class="financial-summary">
+
+
+              <div class="summary-row">
+
+                <span class="summary-label">
+                  Principal Amount
+                </span>
+
+                <span class="summary-value">
+                  ${formatAmount(principalAmount, currency)}
+                </span>
+
+              </div>
+
+
+              <div class="summary-row">
+
+                <span class="summary-label">
+                  Interest Rate
+                </span>
+
+                <span class="summary-value">
+                  ${interestRate.toFixed(2)}%
+                </span>
+
+              </div>
+
+
+              <div class="summary-row">
+
+                <span class="summary-label">
+                  Interest Amount
+                </span>
+
+                <span class="summary-value">
+                  ${formatAmount(interestAmount, currency)}
+                </span>
+
+              </div>
+
+
+              <div class="summary-row summary-total">
+
+                <span class="summary-label">
+                  Total Facility Amount
+                </span>
+
+                <span class="summary-value">
+                  ${formatAmount(totalFacilityAmount, currency)}
+                </span>
+
+              </div>
+
+
+              <div class="summary-row">
+
+                <span class="summary-label">
+                  Outstanding Balance After Transaction
+                </span>
+
+                <span class="summary-value">
+                  ${formatAmount(outstandingAtTransaction, currency)}
+                </span>
+
+              </div>
+
+
+            </div>
+
+          </div>
+
+
+          <!-- RECORD -->
+
           <div class="section">
 
             <div class="section-title">
               Transaction Record
             </div>
 
+
             <div class="grid">
 
               <div class="field">
-                <span class="field-label">Date & Time</span>
+
+                <span class="field-label">
+                  Date & Time
+                </span>
+
                 <div class="field-value">
                   ${formatDate(transaction.created_at)}
                 </div>
+
               </div>
 
+
               <div class="field">
-                <span class="field-label">Performed By</span>
+
+                <span class="field-label">
+                  Performed By
+                </span>
+
                 <div class="field-value">
                   ${transaction.performed_by_name || "System"}
                 </div>
+
               </div>
 
             </div>
@@ -461,6 +786,8 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           }
 
 
+          <!-- FOOTER -->
+
           <div class="footer">
 
             <span>
@@ -473,7 +800,9 @@ export function printFacilityTransaction({ facility, transaction, company }) {
 
           </div>
 
+
         </div>
+
 
         <button
           class="print-button"
@@ -482,7 +811,9 @@ export function printFacilityTransaction({ facility, transaction, company }) {
           Print Receipt
         </button>
 
+
       </body>
+
     </html>
   `);
 

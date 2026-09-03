@@ -106,6 +106,7 @@ try {
             currency_id,
             principal_amount,
             interest_rate,
+            interest_amount,
             outstanding_amount
         FROM financial_facilities
         WHERE id = ?
@@ -175,16 +176,8 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Calculate New Outstanding Amount
+    | Calculate New Outstanding
     |--------------------------------------------------------------------------
-    |
-    | outstanding_amount already includes:
-    |
-    | Principal + Interest
-    |
-    | Therefore repayments automatically deduct from
-    | the complete amount owed.
-    |
     */
 
     $newOutstanding = bcsub(
@@ -193,12 +186,6 @@ try {
         6
     );
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Prevent Negative Zero
-    |--------------------------------------------------------------------------
-    */
 
     if (
         bccomp(
@@ -213,7 +200,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Determine New Status
+    | Determine Status
     |--------------------------------------------------------------------------
     */
 
@@ -234,7 +221,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Prepare Ledger Remarks
+    | Ledger Remarks
     |--------------------------------------------------------------------------
     */
 
@@ -250,45 +237,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Create Facility Ledger Entry
-    |--------------------------------------------------------------------------
-    */
-
-    $ledgerStmt = $pdo->prepare("
-        INSERT INTO facility_ledger_entries (
-            facility_id,
-            entry_type,
-            amount,
-            currency_id,
-            remarks,
-            performed_by
-        )
-        VALUES (
-            ?,
-            'REPAYMENT',
-            ?,
-            ?,
-            ?,
-            ?
-        )
-    ");
-
-
-    $ledgerStmt->execute([
-        $facilityId,
-        $repaymentAmount,
-        $facility['currency_id'],
-        $ledgerRemarks,
-        $user['id']
-    ]);
-
-
-    $ledgerId = $pdo->lastInsertId();
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Update Facility
+    | Update Facility FIRST
     |--------------------------------------------------------------------------
     */
 
@@ -308,6 +257,65 @@ try {
     ]);
 
 
+    /*
+    |--------------------------------------------------------------------------
+    | Create Historical Ledger Entry
+    |--------------------------------------------------------------------------
+    |
+    | interest_amount is preserved as a snapshot of
+    | the facility's agreed interest.
+    |
+    | outstanding_after records the exact balance
+    | immediately after this repayment.
+    |
+    */
+
+    $ledgerStmt = $pdo->prepare("
+        INSERT INTO facility_ledger_entries (
+            facility_id,
+            entry_type,
+            amount,
+            interest_amount,
+            outstanding_after,
+            currency_id,
+            remarks,
+            performed_by
+        )
+        VALUES (
+            ?,
+            'REPAYMENT',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+        )
+    ");
+
+
+    $ledgerStmt->execute([
+        $facilityId,
+
+        $repaymentAmount,
+
+        // Historical interest snapshot
+        $facility['interest_amount'],
+
+        // Balance after this repayment
+        $newOutstanding,
+
+        $facility['currency_id'],
+
+        $ledgerRemarks,
+
+        $user['id']
+    ]);
+
+
+    $ledgerId = $pdo->lastInsertId();
+
+
     $pdo->commit();
 
 
@@ -317,9 +325,19 @@ try {
 
         'repayment' => [
             'ledger_entry_id' => (int) $ledgerId,
+
             'facility_id' => (int) $facilityId,
+
+            'entry_type' => 'REPAYMENT',
+
             'amount' => $repaymentAmount,
+
+            'interest_amount' => $facility['interest_amount'],
+
             'remaining_outstanding' => $newOutstanding,
+
+            'outstanding_after' => $newOutstanding,
+
             'status' => $newStatus
         ]
     ]);

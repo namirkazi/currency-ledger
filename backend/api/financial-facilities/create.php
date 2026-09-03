@@ -147,16 +147,18 @@ $interestRate = nonNegativeDecimalValue(
 | Calculate Interest
 |--------------------------------------------------------------------------
 |
+| Current system calculation:
+|
+| Principal × Interest Rate / 100
+|
 | Example:
 |
-| Principal: 10,000
+| Principal: 200,000
 | Interest Rate: 3%
 |
-| Interest:
-| 10,000 × 3 / 100 = 300
+| Interest = 6,000
 |
-| Total Outstanding:
-| 10,000 + 300 = 10,300
+| Total Outstanding = 206,000
 |
 */
 
@@ -225,14 +227,12 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Validate Lender Company
+    | Validate Lender
     |--------------------------------------------------------------------------
     */
 
     $companyStmt = $pdo->prepare("
-        SELECT
-            id,
-            name
+        SELECT id, name
         FROM companies
         WHERE id = ?
           AND status = 'ACTIVE'
@@ -260,7 +260,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Validate Borrower Company
+    | Validate Borrower
     |--------------------------------------------------------------------------
     */
 
@@ -288,11 +288,7 @@ try {
     */
 
     $currencyStmt = $pdo->prepare("
-        SELECT
-            id,
-            code,
-            name,
-            symbol
+        SELECT id, code, name, symbol
         FROM currencies
         WHERE id = ?
           AND active = 1
@@ -320,7 +316,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Generate Reference Number
+    | Generate Reference
     |--------------------------------------------------------------------------
     */
 
@@ -339,7 +335,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Create Financial Facility
+    | Create Facility
     |--------------------------------------------------------------------------
     */
 
@@ -354,6 +350,7 @@ try {
             principal_amount,
             outstanding_amount,
             interest_rate,
+            interest_amount,
             request_date,
             disbursement_date,
             due_date,
@@ -375,6 +372,7 @@ try {
             ?,
             ?,
             ?,
+            ?,
             'PENDING_APPROVAL',
             ?
         )
@@ -384,36 +382,24 @@ try {
     $facilityStmt->execute([
 
         $referenceNumber,
-
         $facilityType,
-
         $lenderCompanyId,
-
         $borrowerCompanyId,
-
         $currencyId,
 
-        /*
-        | Principal amount
-        */
         $principalAmount,
 
-        /*
-        | Principal + Interest
-        */
+        // Principal + Interest
         $totalOutstandingAmount,
 
-        /*
-        | Interest percentage
-        */
         $interestRate,
 
+        // Actual calculated interest
+        $interestAmount,
+
         $requestDate,
-
         $disbursementDate,
-
         $dueDate,
-
         $purpose,
 
         $user['id']
@@ -442,7 +428,7 @@ try {
 
             'interest_rate' => $interestRate,
 
-            'calculated_interest' => $interestAmount,
+            'interest_amount' => $interestAmount,
 
             'outstanding_amount' => $totalOutstandingAmount,
 

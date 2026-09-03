@@ -31,12 +31,6 @@ if (!is_array($data)) {
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| Validate Facility ID
-|--------------------------------------------------------------------------
-*/
-
 $facilityId = filter_var(
     $data['facility_id'] ?? null,
     FILTER_VALIDATE_INT
@@ -75,7 +69,8 @@ try {
             currency_id,
             principal_amount,
             outstanding_amount,
-            interest_rate
+            interest_rate,
+            interest_amount
         FROM financial_facilities
         WHERE id = ?
         LIMIT 1
@@ -117,15 +112,6 @@ try {
     |--------------------------------------------------------------------------
     | Update Facility
     |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    |
-    | We DO NOT touch outstanding_amount here.
-    |
-    | outstanding_amount was already calculated during creation:
-    |
-    | Principal + Interest
-    |
     */
 
     $updateStmt = $pdo->prepare("
@@ -147,18 +133,17 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Create Facility Ledger Entry
+    | Create Historical Ledger Entry
     |--------------------------------------------------------------------------
     |
-    | Only the PRINCIPAL is actually disbursed.
+    | amount:
+    | Actual principal transferred
     |
-    | Example:
+    | interest_amount:
+    | Total agreed/calculated interest
     |
-    | Principal: 10,000
-    | Interest: 3%
-    | Total Outstanding: 10,300
-    |
-    | Actual money transferred = 10,000
+    | outstanding_after:
+    | Principal + Interest owed after disbursement
     |
     */
 
@@ -167,6 +152,8 @@ try {
             facility_id,
             entry_type,
             amount,
+            interest_amount,
+            outstanding_after,
             currency_id,
             remarks,
             performed_by
@@ -177,6 +164,8 @@ try {
             ?,
             ?,
             ?,
+            ?,
+            ?,
             ?
         )
     ");
@@ -184,9 +173,20 @@ try {
 
     $ledgerStmt->execute([
         $facilityId,
+
+        // Actual cash disbursed
         $facility['principal_amount'],
+
+        // Historical interest snapshot
+        $facility['interest_amount'],
+
+        // Historical outstanding balance
+        $facility['outstanding_amount'],
+
         $facility['currency_id'],
+
         $remarks ?: 'Facility disbursed',
+
         $user['id']
     ]);
 
@@ -205,7 +205,13 @@ try {
             'ledger_entry_id' => (int) $ledgerId,
             'facility_id' => (int) $facilityId,
             'entry_type' => 'DISBURSEMENT',
+
             'amount' => $facility['principal_amount'],
+
+            'interest_amount' => $facility['interest_amount'],
+
+            'outstanding_after' => $facility['outstanding_amount'],
+
             'currency_id' => (int) $facility['currency_id'],
         ],
 
@@ -218,9 +224,8 @@ try {
 
             'interest_rate' => $facility['interest_rate'],
 
-            /*
-            | This remains Principal + Interest
-            */
+            'interest_amount' => $facility['interest_amount'],
+
             'outstanding_amount' => $facility['outstanding_amount']
         ]
     ]);
