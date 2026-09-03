@@ -81,51 +81,7 @@ export function printFacilityTransaction({
    * outstanding_after = 110,000
    */
 
-  let outstandingAtTransaction = 0;
-
-  /*
-   * Best case:
-   *
-   * The transaction itself already contains the historical snapshot.
-   */
-
-  if (
-    transaction.outstanding_after !== undefined &&
-    transaction.outstanding_after !== null
-  ) {
-    outstandingAtTransaction = Number(transaction.outstanding_after);
-  } else {
-    /*
-     * Fallback:
-     *
-     * Try finding the matching ledger entry.
-     */
-    const transactionId = Number(
-      transaction.id || transaction.ledger_entry_id || 0,
-    );
-
-    const matchingEntry = transactions.find((item) => {
-      const itemId = Number(item.id || item.ledger_entry_id || 0);
-
-      return itemId === transactionId;
-    });
-
-    if (
-      matchingEntry &&
-      matchingEntry.outstanding_after !== undefined &&
-      matchingEntry.outstanding_after !== null
-    ) {
-      outstandingAtTransaction = Number(matchingEntry.outstanding_after);
-    } else if (
-      /*
-       * Last fallback for a disbursement.
-       */
-      String(transaction.entry_type || "").toUpperCase() === "DISBURSEMENT"
-    ) {
-      outstandingAtTransaction = totalFacilityAmount;
-    }
-  }
-
+  const outstandingAtTransaction = Number(transaction.outstanding_after ?? 0);
   const printWindow = window.open("", "_blank", "width=900,height=1000");
 
   if (!printWindow) {

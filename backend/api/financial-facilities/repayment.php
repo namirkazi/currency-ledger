@@ -96,6 +96,10 @@ try {
     |--------------------------------------------------------------------------
     | Lock Facility
     |--------------------------------------------------------------------------
+    |
+    | The facility's outstanding_amount is always the
+    | latest balance after the most recent transaction.
+    |
     */
 
     $facilityStmt = $pdo->prepare("
@@ -157,6 +161,19 @@ try {
 
     /*
     |--------------------------------------------------------------------------
+    | Current Outstanding
+    |--------------------------------------------------------------------------
+    */
+
+    $currentOutstanding = bcadd(
+        (string)$facility['outstanding_amount'],
+        '0',
+        6
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
     | Prevent Overpayment
     |--------------------------------------------------------------------------
     */
@@ -164,7 +181,7 @@ try {
     if (
         bccomp(
             $repaymentAmount,
-            $facility['outstanding_amount'],
+            $currentOutstanding,
             6
         ) > 0
     ) {
@@ -178,14 +195,28 @@ try {
     |--------------------------------------------------------------------------
     | Calculate New Outstanding
     |--------------------------------------------------------------------------
+    |
+    | Example:
+    |
+    | Current Outstanding = 210,000
+    | Repayment           = 100,000
+    |
+    | New Outstanding     = 110,000
+    |
     */
 
     $newOutstanding = bcsub(
-        $facility['outstanding_amount'],
+        $currentOutstanding,
         $repaymentAmount,
         6
     );
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Clean Zero
+    |--------------------------------------------------------------------------
+    */
 
     if (
         bccomp(
@@ -229,6 +260,7 @@ try {
 
 
     if ($referenceNumber) {
+
         $ledgerRemarks .=
             ' | Reference: ' .
             $referenceNumber;
@@ -237,8 +269,11 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Update Facility FIRST
+    | Update Facility
     |--------------------------------------------------------------------------
+    |
+    | This keeps the current/latest balance.
+    |
     */
 
     $updateStmt = $pdo->prepare("
@@ -262,11 +297,20 @@ try {
     | Create Historical Ledger Entry
     |--------------------------------------------------------------------------
     |
-    | interest_amount is preserved as a snapshot of
-    | the facility's agreed interest.
+    | IMPORTANT:
     |
-    | outstanding_after records the exact balance
-    | immediately after this repayment.
+    | outstanding_after is permanently stored.
+    |
+    | Example:
+    |
+    | Before repayment = 210,000
+    | Repayment        = 100,000
+    |
+    | Stored:
+    |
+    | outstanding_after = 110,000
+    |
+    | Future receipts can directly use this value.
     |
     */
 
@@ -299,10 +343,16 @@ try {
 
         $repaymentAmount,
 
-        // Historical interest snapshot
+        /*
+         * Store facility interest snapshot.
+         *
+         * This is informational on the repayment entry.
+         */
         $facility['interest_amount'],
 
-        // Balance after this repayment
+        /*
+         * The exact balance after THIS repayment.
+         */
         $newOutstanding,
 
         $facility['currency_id'],
@@ -324,21 +374,33 @@ try {
         'message' => 'Repayment recorded successfully.',
 
         'repayment' => [
-            'ledger_entry_id' => (int) $ledgerId,
 
-            'facility_id' => (int) $facilityId,
+            'ledger_entry_id' =>
+            (int)$ledgerId,
 
-            'entry_type' => 'REPAYMENT',
+            'facility_id' =>
+            (int)$facilityId,
 
-            'amount' => $repaymentAmount,
+            'entry_type' =>
+            'REPAYMENT',
 
-            'interest_amount' => $facility['interest_amount'],
+            'amount' =>
+            $repaymentAmount,
 
-            'remaining_outstanding' => $newOutstanding,
+            'interest_amount' =>
+            $facility['interest_amount'],
 
-            'outstanding_after' => $newOutstanding,
+            'outstanding_before' =>
+            $currentOutstanding,
 
-            'status' => $newStatus
+            'outstanding_after' =>
+            $newOutstanding,
+
+            'remaining_outstanding' =>
+            $newOutstanding,
+
+            'status' =>
+            $newStatus
         ]
     ]);
 } catch (Throwable $e) {

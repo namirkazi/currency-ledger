@@ -110,23 +110,119 @@ try {
 
     /*
     |--------------------------------------------------------------------------
+    | Financial Calculation
+    |--------------------------------------------------------------------------
+    |
+    | Principal: 200,000
+    | Interest: 5%
+    |
+    | Interest Amount:
+    | 200,000 × 5 / 100 = 10,000
+    |
+    | Total Outstanding:
+    | 200,000 + 10,000 = 210,000
+    |
+    */
+
+    $principalAmount = bcadd(
+        (string)$facility['principal_amount'],
+        '0',
+        6
+    );
+
+
+    $interestRate = bcadd(
+        (string)$facility['interest_rate'],
+        '0',
+        6
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Calculate Interest
+    |--------------------------------------------------------------------------
+    |
+    | If interest_amount was already calculated and stored,
+    | preserve that value.
+    |
+    | Otherwise calculate it from the interest rate.
+    */
+
+    if (
+        isset($facility['interest_amount']) &&
+        bccomp(
+            (string)$facility['interest_amount'],
+            '0',
+            6
+        ) > 0
+    ) {
+
+        $interestAmount = bcadd(
+            (string)$facility['interest_amount'],
+            '0',
+            6
+        );
+    } else {
+
+        $interestAmount = bcdiv(
+            bcmul(
+                $principalAmount,
+                $interestRate,
+                6
+            ),
+            '100',
+            6
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Total Facility Obligation
+    |--------------------------------------------------------------------------
+    */
+
+    $totalFacilityAmount = bcadd(
+        $principalAmount,
+        $interestAmount,
+        6
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
     | Update Facility
     |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | outstanding_amount becomes the TOTAL amount owed,
+    | including interest.
+    |
     */
 
     $updateStmt = $pdo->prepare("
         UPDATE financial_facilities
         SET
             status = 'DISBURSED',
+
             disbursement_date = COALESCE(
                 disbursement_date,
                 CURDATE()
-            )
+            ),
+
+            interest_amount = ?,
+
+            outstanding_amount = ?
+
         WHERE id = ?
     ");
 
 
     $updateStmt->execute([
+        $interestAmount,
+        $totalFacilityAmount,
         $facilityId
     ]);
 
@@ -136,14 +232,13 @@ try {
     | Create Historical Ledger Entry
     |--------------------------------------------------------------------------
     |
-    | amount:
-    | Actual principal transferred
+    | This stores the exact financial state at disbursement.
     |
-    | interest_amount:
-    | Total agreed/calculated interest
+    | Example:
     |
-    | outstanding_after:
-    | Principal + Interest owed after disbursement
+    | amount             = 200,000
+    | interest_amount    = 10,000
+    | outstanding_after  = 210,000
     |
     */
 
@@ -174,14 +269,11 @@ try {
     $ledgerStmt->execute([
         $facilityId,
 
-        // Actual cash disbursed
-        $facility['principal_amount'],
+        $principalAmount,
 
-        // Historical interest snapshot
-        $facility['interest_amount'],
+        $interestAmount,
 
-        // Historical outstanding balance
-        $facility['outstanding_amount'],
+        $totalFacilityAmount,
 
         $facility['currency_id'],
 
@@ -202,31 +294,40 @@ try {
         'message' => 'Facility disbursed successfully.',
 
         'transaction' => [
-            'ledger_entry_id' => (int) $ledgerId,
-            'facility_id' => (int) $facilityId,
+            'ledger_entry_id' => (int)$ledgerId,
+
+            'facility_id' => (int)$facilityId,
+
             'entry_type' => 'DISBURSEMENT',
 
-            'amount' => $facility['principal_amount'],
+            'amount' => $principalAmount,
 
-            'interest_amount' => $facility['interest_amount'],
+            'interest_amount' => $interestAmount,
 
-            'outstanding_after' => $facility['outstanding_amount'],
+            'outstanding_after' => $totalFacilityAmount,
 
-            'currency_id' => (int) $facility['currency_id'],
+            'currency_id' => (int)$facility['currency_id']
         ],
 
         'facility' => [
-            'id' => (int) $facilityId,
-            'reference_number' => $facility['reference_number'],
+            'id' => (int)$facilityId,
+
+            'reference_number' =>
+            $facility['reference_number'],
+
             'status' => 'DISBURSED',
 
-            'principal_amount' => $facility['principal_amount'],
+            'principal_amount' =>
+            $principalAmount,
 
-            'interest_rate' => $facility['interest_rate'],
+            'interest_rate' =>
+            $interestRate,
 
-            'interest_amount' => $facility['interest_amount'],
+            'interest_amount' =>
+            $interestAmount,
 
-            'outstanding_amount' => $facility['outstanding_amount']
+            'outstanding_amount' =>
+            $totalFacilityAmount
         ]
     ]);
 } catch (Throwable $e) {
