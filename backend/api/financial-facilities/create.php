@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../helpers/response.php';
 require_once __DIR__ . '/../../helpers/validation.php';
 
 
-$user = requireAdmin();
+$user = requireAuth();
 
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

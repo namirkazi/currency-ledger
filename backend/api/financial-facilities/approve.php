@@ -102,20 +102,6 @@ try {
         );
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Optional safety: requester cannot approve own request
-    |--------------------------------------------------------------------------
-    */
-
-    if ((int)$facility['requested_by'] === (int)$user['id']) {
-        throw new RuntimeException(
-            'You cannot approve your own request.'
-        );
-    }
-
-
     /*
     |--------------------------------------------------------------------------
     | Update facility
