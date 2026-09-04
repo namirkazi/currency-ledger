@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { financialFacilitiesApi } from "../../services/financialFacilities";
-import useAuth from "../../hooks/useAuth";
+import { useAuth } from "../../hooks/useAuth";
 import { printFacilityTransaction } from "../../utils/printFacilityTransactions";
 
 function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
