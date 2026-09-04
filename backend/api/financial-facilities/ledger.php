@@ -39,6 +39,8 @@ try {
             fle.facility_id,
             fle.entry_type,
             fle.amount,
+            fle.interest_amount,
+            fle.outstanding_after,
             fle.remarks,
             fle.created_at,
 

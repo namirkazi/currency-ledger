@@ -163,8 +163,6 @@ export function printFacilityTransaction({
    * REPAYMENT 100,000
    * outstanding_after = 200,000
    */
-  console.log("PRINT TRANSACTION:", transaction);
-  console.log("OUTSTANDING AFTER:", transaction.outstanding_after);
   const outstandingAtTransaction = Number(
     ledgerEntry?.outstanding_after ?? transaction?.outstanding_after ?? 0,
   );
