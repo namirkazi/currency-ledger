@@ -913,3 +913,529 @@
   background: #f9fafb;
   border-color: #98a2b3;
 }
+/* =========================================================
+   WAITING FOR APPROVAL
+========================================================= */
+
+.waiting-approval {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 10px 14px;
+
+  border: 1px solid #fed7aa;
+  border-radius: 9px;
+
+  background: #fff7ed;
+  color: #9a3412;
+
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   CONFIRMATION MODAL
+========================================================= */
+
+.confirmation-overlay {
+  position: fixed;
+  inset: 0;
+
+  z-index: 3000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(15, 23, 42, 0.55);
+
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+
+  animation: confirmationFadeIn 0.18s ease-out;
+}
+
+.confirmation-modal {
+  width: min(100%, 480px);
+
+  padding: 24px;
+
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 28px 80px rgba(15, 23, 42, 0.22),
+    0 8px 24px rgba(15, 23, 42, 0.1);
+
+  animation: confirmationSlideIn 0.22s ease-out;
+}
+
+/* =========================================================
+   TOP
+========================================================= */
+
+.confirmation-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 20px;
+}
+
+.confirmation-icon {
+  width: 46px;
+  height: 46px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 13px;
+
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.confirmation-icon.success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.confirmation-icon.primary {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.confirmation-icon.danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.confirmation-close {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: 8px;
+
+  background: transparent;
+  color: #64748b;
+
+  font-size: 23px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.confirmation-close:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.confirmation-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   CONTENT
+========================================================= */
+
+.confirmation-content {
+  margin-bottom: 22px;
+}
+
+.confirmation-eyebrow {
+  display: block;
+
+  margin-bottom: 7px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.confirmation-content h3 {
+  margin: 0 0 9px;
+
+  color: #0f172a;
+
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.confirmation-content p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+/* =========================================================
+   SUMMARY
+========================================================= */
+
+.confirmation-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  gap: 1px;
+
+  margin-bottom: 20px;
+
+  overflow: hidden;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #e2e8f0;
+}
+
+.confirmation-summary > div {
+  min-width: 0;
+
+  padding: 14px;
+
+  background: #f8fafc;
+}
+
+.confirmation-summary span {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.confirmation-summary strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: #0f172a;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* =========================================================
+   INPUTS
+========================================================= */
+
+.confirmation-input-group {
+  margin-bottom: 18px;
+}
+
+.confirmation-input-group label {
+  display: block;
+
+  margin-bottom: 8px;
+
+  color: #334155;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.required-mark {
+  margin-left: 4px;
+
+  color: #dc2626;
+}
+
+.confirmation-input-group textarea {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  resize: vertical;
+
+  padding: 11px 12px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+
+  outline: none;
+
+  background: #ffffff;
+
+  color: #0f172a;
+
+  font-family: inherit;
+  font-size: 13px;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.confirmation-input-group textarea:focus {
+  border-color: #64748b;
+
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.1);
+}
+
+/* =========================================================
+   AMOUNT INPUT
+========================================================= */
+
+.amount-input-wrap {
+  display: flex;
+  align-items: center;
+
+  overflow: hidden;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.amount-input-wrap:focus-within {
+  border-color: #64748b;
+
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.1);
+}
+
+.amount-input-wrap span {
+  display: flex;
+  align-items: center;
+
+  align-self: stretch;
+
+  padding: 0 13px;
+
+  border-right: 1px solid #e2e8f0;
+
+  background: #f8fafc;
+
+  color: #475569;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.amount-input-wrap input {
+  width: 100%;
+
+  padding: 12px;
+
+  border: none;
+
+  outline: none;
+
+  background: transparent;
+
+  color: #0f172a;
+
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.confirmation-input-group small {
+  display: block;
+
+  margin-top: 7px;
+
+  color: #94a3b8;
+
+  font-size: 11px;
+}
+
+/* =========================================================
+   ERROR
+========================================================= */
+
+.confirmation-error {
+  margin-bottom: 18px;
+
+  padding: 11px 12px;
+
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+
+  background: #fef2f2;
+  color: #b91c1c;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 24px;
+  padding-top: 18px;
+
+  border-top: 1px solid #e2e8f0;
+}
+
+.confirmation-actions button {
+  min-width: 126px;
+
+  padding: 10px 16px;
+
+  border-radius: 9px;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.confirmation-actions button:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+}
+
+.confirmation-cancel {
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+  color: #475569;
+}
+
+.confirmation-cancel:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.confirmation-confirm {
+  border: 1px solid transparent;
+
+  color: #ffffff;
+}
+
+.confirmation-confirm.success {
+  background: #15803d;
+}
+
+.confirmation-confirm.success:hover:not(:disabled) {
+  background: #166534;
+}
+
+.confirmation-confirm.primary {
+  background: #2563eb;
+}
+
+.confirmation-confirm.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.confirmation-confirm.danger {
+  background: #dc2626;
+}
+
+.confirmation-confirm.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.confirmation-confirm:hover:not(:disabled),
+.confirmation-cancel:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   ANIMATIONS
+========================================================= */
+
+@keyframes confirmationFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes confirmationSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 520px) {
+  .confirmation-overlay {
+    align-items: flex-end;
+
+    padding: 12px;
+  }
+
+  .confirmation-modal {
+    width: 100%;
+
+    padding: 20px;
+
+    border-radius: 16px;
+  }
+
+  .confirmation-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .confirmation-actions {
+    flex-direction: column-reverse;
+  }
+
+  .confirmation-actions button {
+    width: 100%;
+  }
+}

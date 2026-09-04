@@ -1,22 +1,28 @@
 import { useEffect, useState } from "react";
 
 import { financialFacilitiesApi } from "../../services/financialFacilities";
-import useauth from "../../hooks/useAuth";
+import useAuth from "../../hooks/useAuth";
 import { printFacilityTransaction } from "../../utils/printFacilityTransactions";
 
 function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
-  const [data, setData] = useState(null);
   const { user } = useAuth();
 
-  const isAdmin = user?.role?.toUpperCase() === "ADMIN";
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState("");
+
   const [ledgerEntries, setLedgerEntries] = useState([]);
+
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmationAction, setConfirmationAction] = useState(null);
+
   const [remarks, setRemarks] = useState("");
+  const [repaymentAmount, setRepaymentAmount] = useState("");
+  const [actionError, setActionError] = useState("");
+
   const [activeTab, setActiveTab] = useState("OVERVIEW");
+
+  const isAdmin = user?.role?.toUpperCase() === "ADMIN";
 
   /*
     |--------------------------------------------------------------------------
@@ -64,74 +70,94 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
 
   /*
     |--------------------------------------------------------------------------
-    | Action Handler
+    | Open Confirmation Modal
     |--------------------------------------------------------------------------
     */
 
-  const handleAction = async (action) => {
+  const handleAction = (action) => {
     if (!data?.facility) return;
 
-    const facility = data.facility;
+    setConfirmationAction(action);
+    setRemarks("");
+    setRepaymentAmount("");
+    setActionError("");
+  };
 
-    // Actions that need a proper confirmation modal
-    if (["approve", "reject", "cancel"].includes(action)) {
-      setConfirmationAction(action);
-      setRemarks("");
+  /*
+    |--------------------------------------------------------------------------
+    | Close Confirmation Modal
+    |--------------------------------------------------------------------------
+    */
+
+  const closeConfirmation = () => {
+    if (actionLoading) return;
+
+    setConfirmationAction(null);
+    setRemarks("");
+    setRepaymentAmount("");
+    setActionError("");
+  };
+
+  /*
+    |--------------------------------------------------------------------------
+    | Confirm Action
+    |--------------------------------------------------------------------------
+    */
+
+  const confirmAction = async () => {
+    if (!data?.facility || !confirmationAction) {
       return;
     }
 
-    if (action === "repayment") {
-      const amount = window.prompt("Repayment amount:");
+    const facility = data.facility;
 
-      if (!amount || Number(amount) <= 0) {
+    setActionError("");
+
+    /*
+      |--------------------------------------------------------------------------
+      | Validate Reject / Cancel
+      |--------------------------------------------------------------------------
+      */
+
+    if (["reject", "cancel"].includes(confirmationAction) && !remarks.trim()) {
+      setActionError("Please provide a reason before continuing.");
+
+      return;
+    }
+
+    /*
+      |--------------------------------------------------------------------------
+      | Validate Repayment
+      |--------------------------------------------------------------------------
+      */
+
+    if (confirmationAction === "repayment") {
+      const amount = Number(repaymentAmount);
+      const outstanding = Number(facility.outstanding_amount || 0);
+
+      if (!amount || amount <= 0) {
+        setActionError("Please enter a valid repayment amount.");
+
         return;
       }
 
-      try {
-        setActionLoading(true);
+      if (amount > outstanding) {
+        setActionError(
+          "Repayment amount cannot exceed the outstanding balance.",
+        );
 
-        await financialFacilitiesApi.repayment({
-          facility_id: facility.id,
-          amount,
-        });
-
-        await loadDetails();
-      } catch (err) {
-        alert(err.message || "Unable to record repayment.");
-      } finally {
-        setActionLoading(false);
+        return;
       }
-
-      return;
     }
 
     try {
       setActionLoading(true);
 
-      if (action === "disburse") {
-        await financialFacilitiesApi.disburse(facility.id);
-      }
-
-      await loadDetails();
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Action failed.");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-  const confirmAction = async () => {
-    if (!data?.facility || !confirmationAction) return;
-
-    const facility = data.facility;
-
-    // Require remarks for rejection/cancellation
-    if (["reject", "cancel"].includes(confirmationAction) && !remarks.trim()) {
-      return;
-    }
-
-    try {
-      setActionLoading(true);
+      /*
+        |--------------------------------------------------------------------------
+        | Approve
+        |--------------------------------------------------------------------------
+        */
 
       if (confirmationAction === "approve") {
         await financialFacilitiesApi.approve(
@@ -140,16 +166,53 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
         );
       }
 
+      /*
+        |--------------------------------------------------------------------------
+        | Reject
+        |--------------------------------------------------------------------------
+        */
+
       if (confirmationAction === "reject") {
         await financialFacilitiesApi.reject(facility.id, remarks.trim());
       }
+
+      /*
+        |--------------------------------------------------------------------------
+        | Cancel
+        |--------------------------------------------------------------------------
+        */
 
       if (confirmationAction === "cancel") {
         await financialFacilitiesApi.cancel(facility.id, remarks.trim());
       }
 
+      /*
+        |--------------------------------------------------------------------------
+        | Disburse
+        |--------------------------------------------------------------------------
+        */
+
+      if (confirmationAction === "disburse") {
+        await financialFacilitiesApi.disburse(facility.id);
+      }
+
+      /*
+        |--------------------------------------------------------------------------
+        | Repayment
+        |--------------------------------------------------------------------------
+        */
+
+      if (confirmationAction === "repayment") {
+        await financialFacilitiesApi.repayment({
+          facility_id: facility.id,
+          amount: Number(repaymentAmount),
+        });
+      }
+
       setConfirmationAction(null);
       setRemarks("");
+      setRepaymentAmount("");
+      setActionError("");
 
       await loadDetails();
 
@@ -158,11 +221,13 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
       }
     } catch (err) {
       console.error(err);
-      alert(err.message || "Action failed.");
+
+      setActionError(err.message || "Unable to complete this action.");
     } finally {
       setActionLoading(false);
     }
   };
+
   /*
     |--------------------------------------------------------------------------
     | Formatter
@@ -176,6 +241,74 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
     })}`;
   };
 
+  /*
+    |--------------------------------------------------------------------------
+    | Confirmation Configuration
+    |--------------------------------------------------------------------------
+    */
+
+  const confirmationConfig = {
+    approve: {
+      eyebrow: "Approval Required",
+      title: "Approve financial facility?",
+      description:
+        "This will approve the facility and allow the funds to be disbursed.",
+      confirmLabel: "Approve Facility",
+      icon: "✓",
+      tone: "success",
+    },
+
+    reject: {
+      eyebrow: "Approval Decision",
+      title: "Reject financial facility?",
+      description:
+        "This request will be rejected and will not proceed for disbursement.",
+      confirmLabel: "Reject Facility",
+      icon: "×",
+      tone: "danger",
+    },
+
+    disburse: {
+      eyebrow: "Funds Disbursement",
+      title: "Confirm disbursement",
+      description:
+        "This will record the funds as disbursed and create a permanent ledger transaction.",
+      confirmLabel: "Disburse Funds",
+      icon: "↓",
+      tone: "primary",
+    },
+
+    repayment: {
+      eyebrow: "Repayment Transaction",
+      title: "Record repayment",
+      description:
+        "Enter the amount received. The outstanding balance will be updated and a permanent ledger entry will be created.",
+      confirmLabel: "Record Repayment",
+      icon: "↑",
+      tone: "primary",
+    },
+
+    cancel: {
+      eyebrow: "Cancellation",
+      title: "Cancel financial facility?",
+      description:
+        "This will cancel the facility. Please provide a reason for the cancellation.",
+      confirmLabel: "Cancel Facility",
+      icon: "×",
+      tone: "danger",
+    },
+  };
+
+  const activeConfirmation = confirmationAction
+    ? confirmationConfig[confirmationAction]
+    : null;
+
+  /*
+    |--------------------------------------------------------------------------
+    | Loading
+    |--------------------------------------------------------------------------
+    */
+
   if (loading) {
     return (
       <div className="modal-overlay">
@@ -185,6 +318,12 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
       </div>
     );
   }
+
+  /*
+    |--------------------------------------------------------------------------
+    | Error
+    |--------------------------------------------------------------------------
+    */
 
   if (error) {
     return (
@@ -278,19 +417,23 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
         {/* ACTIONS */}
 
         <div className="facility-actions">
+          {/* PENDING APPROVAL */}
+
           {facility.status === "PENDING_APPROVAL" &&
             (isAdmin ? (
               <>
                 <button
                   type="button"
+                  className="action-btn approve"
                   onClick={() => handleAction("approve")}
                   disabled={actionLoading}
                 >
-                  {actionLoading ? "Processing..." : "Approve"}
+                  Approve
                 </button>
 
                 <button
                   type="button"
+                  className="action-btn reject"
                   onClick={() => handleAction("reject")}
                   disabled={actionLoading}
                 >
@@ -298,20 +441,10 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
                 </button>
               </>
             ) : (
-              <div
-                style={{
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  background: "#fff7ed",
-                  border: "1px solid #fed7aa",
-                  color: "#9a3412",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                }}
-              >
-                Waiting for admin approval
-              </div>
+              <div className="waiting-approval">Waiting for admin approval</div>
             ))}
+
+          {/* APPROVED */}
 
           {facility.status === "APPROVED" && (
             <>
@@ -332,6 +465,8 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
               </button>
             </>
           )}
+
+          {/* DISBURSED / PARTIALLY REPAID */}
 
           {(facility.status === "DISBURSED" ||
             facility.status === "PARTIALLY_REPAID") && (
@@ -364,6 +499,8 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
         {/* TAB CONTENT */}
 
         <div className="facility-tab-content">
+          {/* OVERVIEW */}
+
           {activeTab === "OVERVIEW" && (
             <div className="facility-overview">
               <div className="overview-row">
@@ -414,9 +551,11 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
             </div>
           )}
 
+          {/* APPROVAL HISTORY */}
+
           {activeTab === "APPROVALS" && (
             <div className="timeline">
-              {data.approval_history?.length === 0 && (
+              {!data.approval_history?.length && (
                 <div className="empty-history">No approval history.</div>
               )}
 
@@ -439,6 +578,8 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
               ))}
             </div>
           )}
+
+          {/* LEDGER */}
 
           {activeTab === "LEDGER" && (
             <div className="facility-ledger">
@@ -506,97 +647,161 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
           </button>
         </div>
       </div>
-      {confirmationAction && (
-        <div
-          className="action-confirmation-overlay"
-          onMouseDown={() => {
-            if (!actionLoading) {
-              setConfirmationAction(null);
-              setRemarks("");
-            }
-          }}
-        >
+
+      {/* CONFIRMATION MODAL */}
+
+      {confirmationAction && activeConfirmation && (
+        <div className="confirmation-overlay" onMouseDown={closeConfirmation}>
           <div
-            className="action-confirmation-modal"
+            className={`confirmation-modal ${activeConfirmation.tone}`}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="confirmation-icon">
-              {confirmationAction === "approve" && "✓"}
-              {confirmationAction === "reject" && "!"}
-              {confirmationAction === "cancel" && "×"}
+            {/* TOP */}
+
+            <div className="confirmation-top">
+              <div className={`confirmation-icon ${activeConfirmation.tone}`}>
+                {activeConfirmation.icon}
+              </div>
+
+              <button
+                type="button"
+                className="confirmation-close"
+                disabled={actionLoading}
+                onClick={closeConfirmation}
+              >
+                ×
+              </button>
             </div>
 
+            {/* CONTENT */}
+
             <div className="confirmation-content">
-              <span className="confirmation-eyebrow">CONFIRM ACTION</span>
+              <span className="confirmation-eyebrow">
+                {activeConfirmation.eyebrow}
+              </span>
 
-              <h3>
-                {confirmationAction === "approve" && "Approve Facility?"}
-                {confirmationAction === "reject" && "Reject Facility?"}
-                {confirmationAction === "cancel" && "Cancel Facility?"}
-              </h3>
+              <h3>{activeConfirmation.title}</h3>
 
-              <p>
-                {confirmationAction === "approve" &&
-                  "This facility will be approved and moved to the next stage."}
+              <p>{activeConfirmation.description}</p>
+            </div>
 
-                {confirmationAction === "reject" &&
-                  "This facility will be rejected. Please provide a reason below."}
+            {/* FINANCIAL SUMMARY */}
 
-                {confirmationAction === "cancel" &&
-                  "This facility will be cancelled. Please provide a reason below."}
-              </p>
+            <div className="confirmation-summary">
+              <div>
+                <span>Facility</span>
 
-              <div className="confirmation-remarks">
+                <strong>{facility.reference_number}</strong>
+              </div>
+
+              <div>
+                <span>
+                  {confirmationAction === "repayment"
+                    ? "Outstanding Balance"
+                    : "Facility Amount"}
+                </span>
+
+                <strong>
+                  {formatAmount(
+                    confirmationAction === "repayment"
+                      ? facility.outstanding_amount
+                      : facility.principal_amount,
+                    facility.currency_code,
+                  )}
+                </strong>
+              </div>
+            </div>
+
+            {/* REPAYMENT AMOUNT */}
+
+            {confirmationAction === "repayment" && (
+              <div className="confirmation-input-group">
+                <label>Repayment Amount</label>
+
+                <div className="amount-input-wrap">
+                  <span>{facility.currency_code}</span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    max={facility.outstanding_amount}
+                    step="0.01"
+                    autoFocus
+                    value={repaymentAmount}
+                    onChange={(event) => {
+                      setRepaymentAmount(event.target.value);
+                      setActionError("");
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <small>
+                  Maximum:{" "}
+                  {formatAmount(
+                    facility.outstanding_amount,
+                    facility.currency_code,
+                  )}
+                </small>
+              </div>
+            )}
+
+            {/* REMARKS */}
+
+            {["approve", "reject", "cancel"].includes(confirmationAction) && (
+              <div className="confirmation-input-group">
                 <label>
                   Remarks
                   {["reject", "cancel"].includes(confirmationAction) && (
-                    <span>Required</span>
+                    <span className="required-mark">*</span>
                   )}
                 </label>
 
                 <textarea
                   value={remarks}
-                  onChange={(event) => setRemarks(event.target.value)}
+                  autoFocus
+                  onChange={(event) => {
+                    setRemarks(event.target.value);
+                    setActionError("");
+                  }}
                   placeholder={
                     confirmationAction === "approve"
-                      ? "Add approval remarks (optional)..."
-                      : "Enter the reason..."
+                      ? "Optional approval remarks..."
+                      : "Provide a reason..."
                   }
-                  rows="4"
-                  autoFocus
+                  rows="3"
                 />
               </div>
+            )}
 
-              <div className="confirmation-actions">
-                <button
-                  className="confirmation-cancel-btn"
-                  disabled={actionLoading}
-                  onClick={() => {
-                    setConfirmationAction(null);
-                    setRemarks("");
-                  }}
-                >
-                  Cancel
-                </button>
+            {/* ERROR */}
 
-                <button
-                  className={`confirmation-submit-btn ${confirmationAction}`}
-                  disabled={
-                    actionLoading ||
-                    (["reject", "cancel"].includes(confirmationAction) &&
-                      !remarks.trim())
-                  }
-                  onClick={confirmAction}
-                >
-                  {actionLoading
-                    ? "Processing..."
-                    : confirmationAction === "approve"
-                      ? "Approve Facility"
-                      : confirmationAction === "reject"
-                        ? "Reject Facility"
-                        : "Cancel Facility"}
-                </button>
-              </div>
+            {actionError && (
+              <div className="confirmation-error">{actionError}</div>
+            )}
+
+            {/* ACTIONS */}
+
+            <div className="confirmation-actions">
+              <button
+                type="button"
+                className="confirmation-cancel"
+                disabled={actionLoading}
+                onClick={closeConfirmation}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className={`confirmation-confirm ${activeConfirmation.tone}`}
+                disabled={actionLoading}
+                onClick={confirmAction}
+              >
+                {actionLoading
+                  ? "Processing..."
+                  : activeConfirmation.confirmLabel}
+              </button>
             </div>
           </div>
         </div>
