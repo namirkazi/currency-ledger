@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { financialFacilitiesApi } from "../../services/financialFacilities";
-
+import useauth from "../../hooks/useAuth";
 import { printFacilityTransaction } from "../../utils/printFacilityTransactions";
 
 function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
   const [data, setData] = useState(null);
+  const { user } = useAuth();
 
+  const isAdmin = user?.role?.toUpperCase() === "ADMIN";
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState("");
@@ -276,25 +278,40 @@ function FacilityDetailsModal({ facilityId, onClose, onUpdated }) {
         {/* ACTIONS */}
 
         <div className="facility-actions">
-          {facility.status === "PENDING_APPROVAL" && (
-            <>
-              <button
-                className="action-btn approve"
-                disabled={actionLoading}
-                onClick={() => handleAction("approve")}
-              >
-                Approve
-              </button>
+          {facility.status === "PENDING_APPROVAL" &&
+            (isAdmin ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleAction("approve")}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? "Processing..." : "Approve"}
+                </button>
 
-              <button
-                className="action-btn reject"
-                disabled={actionLoading}
-                onClick={() => handleAction("reject")}
+                <button
+                  type="button"
+                  onClick={() => handleAction("reject")}
+                  disabled={actionLoading}
+                >
+                  Reject
+                </button>
+              </>
+            ) : (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  background: "#fff7ed",
+                  border: "1px solid #fed7aa",
+                  color: "#9a3412",
+                  fontSize: "14px",
+                  fontWeight: 500,
+                }}
               >
-                Reject
-              </button>
-            </>
-          )}
+                Waiting for admin approval
+              </div>
+            ))}
 
           {facility.status === "APPROVED" && (
             <>
