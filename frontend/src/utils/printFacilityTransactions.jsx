@@ -70,80 +70,14 @@ export function printFacilityTransaction({
 
   /*
    * ============================================================
-   * FIND THE EXACT LEDGER ENTRY
+   * LEDGER ENTRY
    * ============================================================
    *
-   * transactions contains facility_ledger_entries returned by:
-   *
-   * details.php
-   *
-   * We find the exact historical ledger row corresponding to the
-   * transaction being printed.
-   *
-   * This is important because outstanding_after is stored there.
+   * The transaction passed into this function is already the
+   * exact facility_ledger_entries row selected by the user.
    */
 
-  let ledgerEntry = null;
-
-  /*
-   * First try matching transaction.id directly.
-   */
-
-  if (transaction?.id !== undefined && transaction?.id !== null) {
-    ledgerEntry = transactions.find(
-      (entry) => String(entry.id) === String(transaction.id),
-    );
-  }
-
-  /*
-   * If transaction contains a ledger_entry_id, use that.
-   */
-
-  if (
-    !ledgerEntry &&
-    transaction?.ledger_entry_id !== undefined &&
-    transaction?.ledger_entry_id !== null
-  ) {
-    ledgerEntry = transactions.find(
-      (entry) => String(entry.id) === String(transaction.ledger_entry_id),
-    );
-  }
-
-  /*
-   * Fallback:
-   *
-   * Match using facility, type, amount and timestamp.
-   */
-
-  if (!ledgerEntry) {
-    ledgerEntry = transactions.find((entry) => {
-      const sameFacility =
-        String(entry.facility_id) === String(transaction.facility_id);
-
-      const sameType =
-        String(entry.entry_type || "").toUpperCase() ===
-        String(transaction.entry_type || "").toUpperCase();
-
-      const sameAmount =
-        Number(entry.amount || 0) === Number(transaction.amount || 0);
-
-      const sameDate =
-        String(entry.created_at || "") === String(transaction.created_at || "");
-
-      return sameFacility && sameType && sameAmount && sameDate;
-    });
-  }
-
-  /*
-   * Final fallback.
-   *
-   * If the transaction itself already contains the ledger data,
-   * use it directly.
-   */
-
-  if (!ledgerEntry) {
-    ledgerEntry = transaction;
-  }
+  const ledgerEntry = transaction;
 
   /*
    * ============================================================
