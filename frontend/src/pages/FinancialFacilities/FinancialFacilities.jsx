@@ -53,10 +53,10 @@ function FinancialFacilities() {
   }, []);
 
   /*
-    |--------------------------------------------------------------------------
-    | Statistics
-    |--------------------------------------------------------------------------
-    */
+|--------------------------------------------------------------------------
+| Statistics
+|--------------------------------------------------------------------------
+*/
 
   const stats = useMemo(() => {
     let outstanding = 0;
@@ -65,22 +65,40 @@ function FinancialFacilities() {
     let overdue = 0;
 
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     facilities.forEach((facility) => {
       const outstandingAmount = Number(facility.outstanding_amount || 0);
 
-      if (facility.status === "ACTIVE") {
-        active++;
+      /*
+      A facility is financially active if money is still outstanding.
 
+      DISBURSED = fully outstanding
+      PARTIALLY_REPAID = partially outstanding
+    */
+      const isActiveExposure = [
+        "DISBURSED",
+        "PARTIALLY_REPAID",
+        "ACTIVE",
+      ].includes(facility.status);
+
+      if (isActiveExposure && outstandingAmount > 0) {
+        active++;
         outstanding += outstandingAmount;
       }
 
+      /*
+      Pending admin approval
+    */
       if (facility.status === "PENDING_APPROVAL") {
         pending++;
       }
 
-      if (facility.status === "ACTIVE" && facility.due_date) {
-        const dueDate = new Date(facility.due_date);
+      /*
+      Overdue facilities
+    */
+      if (isActiveExposure && outstandingAmount > 0 && facility.due_date) {
+        const dueDate = new Date(`${facility.due_date}T00:00:00`);
 
         if (dueDate < today) {
           overdue += outstandingAmount;
@@ -226,8 +244,9 @@ function FinancialFacilities() {
               { value: "ALL", label: "ALL" },
               { value: "PENDING_APPROVAL", label: "PENDING" },
               { value: "APPROVED", label: "APPROVED" },
-              { value: "ACTIVE", label: "ACTIVE" },
-              { value: "REPAID", label: "REPAID" },
+              { value: "DISBURSED", label: "DISBURSED" },
+              { value: "PARTIALLY_REPAID", label: "PARTIALLY REPAID" },
+              { value: "SETTLED", label: "SETTLED" },
               { value: "REJECTED", label: "REJECTED" },
               { value: "CANCELLED", label: "CANCELLED" },
             ].map((filter) => (
